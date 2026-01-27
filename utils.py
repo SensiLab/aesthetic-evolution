@@ -18,7 +18,6 @@ class ComparisonJob:
 
 def build_messages(data: np.ndarray,
                    root: str,
-                   n: int,
                    prompt: str) -> List[ComparisonJob]:
     """
     Docstring for build_messages. Function takes a list of images
@@ -28,8 +27,6 @@ def build_messages(data: np.ndarray,
     :type data: np.array
     :param root: Root directory for image paths
     :type root: str
-    :param n: Number of samples to process
-    :type n: int
     :param prompt: System prompt for the comparison task
     :type prompt: str
 
@@ -38,8 +35,8 @@ def build_messages(data: np.ndarray,
     """
     # build messages
     jobs = []
-    for i in range(n):
-        for j in range(i+1, n):
+    for i in range(len(data)):
+        for j in range(i+1, len(data)):
             jobs.append(
                 ComparisonJob(
                     job_id=f"comparison_{i}_{j}",
