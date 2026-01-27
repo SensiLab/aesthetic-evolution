@@ -1,0 +1,6 @@
+__pycache__/
+.ipynb_checkpoints/
+check_images/
+curl_noise_03/
+qwen3_system_prompt_jon.ipynb
+Designs/

@@ -1,0 +1,64 @@
+steps:
+  type: int
+  min: 1
+  max: 100
+sampleRate:
+  type: float
+  min: 2
+  max: 360
+ab:
+  type: int
+  min: 0
+  max: 500
+as:
+  type: float
+  min: -1
+  max: 1
+fb:
+  type: int
+  min: 1
+  max: 20
+frx:
+  type: float
+  min: 0.25
+  max: 4
+fry:
+  type: float
+  min: 0.25
+  max: 4
+px:
+  type: flaot
+  min: -6.283185307179586
+  max: 6.283185307179586
+py:
+  type: float
+  min: -6.283185307179586
+  max: 6.283185307179586
+dx:
+  type: float
+  min: 0
+  max: 0.25
+dy:
+  type: float
+  min: 0
+  max: 0.25
+lac:
+  type: float
+  min: 0
+  max: 10
+fo:
+  type: float
+  min: 0
+  max: 2
+mix:
+  type: float
+  min: 0
+  max: 1
+spaceD:
+  type: float
+  min: -1
+  max: 1
+"no":
+  type: int
+  min: 1
+  max: 5
