@@ -40,252 +40,308 @@ class Params:
         """Allows accessing fields using subscript notation (e.g., product['name'])."""
         return getattr(self, item)
 
-def write_json(params: dict,
-               filepath: str,
-               filename: str,
-               population_name: str) -> None:
-    """
-    Function writes parameters to a JSON file.
-    
-    :param params: parameters in dictionary format
-    :type params: dict
-    :param filepath: Path to the directory where the JSON file will be saved
-    :type filepath: str
-    :param filename: Name of the JSON file to be created
-    :type filename: str
-    :param population_name: Name of the population being generated
-    :type population_name: str
-    @author: Stephen Krol
-    @date: Jan 2026
 
-    :returns: None
-    :rtype: None
-    """
+class DesignGenerator:
 
-    full_path = f"{filepath}/{filename}"
+    def __init__(self, 
+                 spec_filepath: str,
+                 sketch_dir: str,
+                 processing: str = "serial",
+                 screen: bool = False,
+                 workers: int = 8) -> None:
+        """
+        Constructor for DesignGenerator class.
+        
+        :param self: Current instance of the class. 
+        :param spec_filepath: Description
+        :type spec_filepath: str
+        :param sketch_dir: Directory containing the Processing sketch.
+        :type sketch_dir: str
+        :param processing: Either 'serial' or 'parallel' processing.
+        :type processing: str
+        :param screen: Whether processing has access to a display.
+        :type screen: bool
+        :param workers: Number of workers for parallel processing.
+        :type workers: int
 
-    with open(f'{full_path}.json', 'w') as f:
-        json.dump({"parameters": params, 
-                   "filename": filename, 
-                   "population_name": population_name,
-                   "base" : os.getcwd()}, f, indent=4)
+        :return: None
+        :rtype: None
+        """
 
+        # initialise folder structure
+        self._initialise()
 
-def generate_rand_params(config: dict) -> dict:
-    """
-    Function generates random parameters for sample.
-    @author: Stephen Krol
-    @date: Jan 2026
-    
-    :param config: A dictionary defining parameter ranges and types.
-    :type config: dict
+        # read param spec
+        self.param_spec = self._read_param_spec(spec_filepath)
 
-    :return: Dictionary of generated random parameters.
-    :rtype: dict
-    """
+        # set processing directory
+        self.sketch_dir = sketch_dir
 
-    params = {}
+        # set processing type
+        assert processing in ["serial", "parallel"], "Processing must be 'serial' or 'parallel'"
+        self.processing = processing
 
-    # sample params using ranges from config
-    for param in config:
-        param_config = config[param]
-        if param_config["type"] == "int":
-            sample = random.randint
+        #  set screen boolean
+        assert isinstance(screen, bool), "Screen must be a boolean value"
+        self.screen = screen
+
+        # set number of workers
+        assert isinstance(workers, int) and workers > 0, "Workers must be a positive integer"
+        self.workers = workers
+
+    def generate_population(self, n: int, name: str) -> list:
+        """
+        Method generates a population of designs.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param n: Number of designs to generate.
+        :type n: int
+        :param name: Name of the population.
+        :type name: str
+
+        :return: List of generated image filenames.
+        :rtype: list
+        """
+
+        # initialise design directories
+        self._initialise_design(name)
+
+        start = time.time()
+        jobs = []
+
+        # write JSON parameters for processing
+        for i in tqdm(range(n)):
+            params = self._generate_initial_params(self.param_spec)
+            filename = f"{name}_{i}"
+            self._write_json(params, f"Designs/Params/{name}", f"{filename}", name)
+            jobs.append((name, filename, self.sketch_dir, self.screen))
+        
+        if self.processing == "serial": # generate images serially
+            for job in tqdm(jobs):
+                self.generate_image(job)
+
+        else: # generate images in parallel
+            with ProcessPoolExecutor(max_workers=self.workers) as pool:
+                pool.map(self.generate_image, jobs)
+        
+        end = time.time()
+
+        print(f"Took {end - start:.2f} seconds to generate {n} designs.")
+
+        return os.listdir(f"Designs/Images/{name}")
+
+    @staticmethod
+    def generate_image(jobs: Tuple[str, str, str, bool]) -> None:
+        """
+        Generate image calls processing to generate an image from parameters.
+        Arguments are passed as a tuple for compatibility with ProcessPoolExecutor.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param jobs: A tuple containing the arguments for generation. 
+            Arg1 is population name, Arg2 is filename, Arg3 is sketch directory,
+            Arg4 is screen boolean.
+        :type jobs: Tuple[str, str, str, bool]
+
+        :return: None
+        :rtype: None
+        """
+
+        population_name, filename, sketch_dir, screen = jobs
+
+        cwd = os.getcwd()
+
+        # if screen is available
+        if screen:
+            subprocess.run([
+                "processing-java",
+                f"--sketch={sketch_dir}",
+                "--run",
+                f"{cwd}/Designs/Params/{population_name}/{filename}.json"], 
+                check=True,
+                cwd=cwd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
         else:
-            sample = random.uniform
+            subprocess.run([
+                "xvfb-run", "-a",
+                "--server-args=-screen 0 1024x768x24 -nolisten tcp",
+                "processing-java",
+                f"--sketch={sketch_dir}",
+                "--run",
+                f"{cwd}/Designs/Params/{population_name}/{filename}.json"], 
+                timeout=20,
+                check=True,
+                cwd=cwd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
 
-        params[param] = sample(param_config["min"], param_config["max"])
+    def _initialise(self) -> None:
+        """
+        Method to initialise the Designs directory structure.
+        @author: Stephen Krol
+        @date: Jan 2026
 
-    # calculate remaining params
-    params["dt"] = 1.0 / (params["fb"] * max(params["frx"], params["fry"] * params["sampleRate"]))
+        :param self: Current instance of the class.
 
-    # spaceP
-    params["spaceP"] = 10**params["spaceD"]
+        :return: None
+        :rtype: None
+        """
 
-    # algorithm
-    params["algorithm"] = random.choice(["SINE", "POW", "SINEOSC", "NOISE", "FRACTAL", "OSC", "TURB", "PHASE"])
+        if not os.path.exists("Designs"):
+            os.mkdir("Designs")
 
-    # radial set to 0
-    params["radial"] = 0
+        if not os.path.exists("Designs/Images"):
+            os.mkdir("Designs/Images")
+        
+        if not os.path.exists("Designs/Params"):
+            os.mkdir("Designs/Params")
+    
+    def _initialise_design(self, name: str):
+        """
+        Method initialises directories for a specific design population.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param name: Name of population
+        :type name: str
+
+        :return: None
+        :rtype: None
+        """
+
+        if not os.path.exists(f"Designs/Images/{name}"):
+            os.mkdir(f"Designs/Images/{name}")
+        
+        if not os.path.exists(f"Designs/Params/{name}"):
+            os.mkdir(f"Designs/Params/{name}")
+
+    def _read_param_spec(self, spec_filepath: str) -> dict:
+        """
+        Method reads parameter specification from a YAML file.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param spec_filepath: Filepath to the YAML specification file.
+        :type spec_filepath: str
+
+        :return: Parameter specification as a dictionary.
+        :rtype: dict
+        """
+
+        # Use a context manager to open and automatically close the file
+        with open(spec_filepath, 'r') as file:
+            # Use safe_load to safely parse the YAML content
+            configuration = yaml.safe_load(file)
+        
+        return configuration
     
 
-    return params
+    def _generate_initial_params(self, config: dict) -> dict:
+        """
+        Method generates inital random parameters for sample.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param config: A dictionary defining parameter ranges and types.
+        :type config: dict
 
-def read_param_spec(spec_filepath: str) -> dict:
-    """
-    Function reads parameter specification from a YAML file.
-    @author: Stephen Krol
-    @date: Jan 2026
-    
-    :param spec_filepath: Filepath to the YAML specification file.
-    :type spec_filepath: str
+        :return: Dictionary of generated random parameters.
+        :rtype: dict
+        """
 
-    :return: Parameter specification as a dictionary.
-    :rtype: dict
-    """
+        params = {}
 
-    # Use a context manager to open and automatically close the file
-    with open(spec_filepath, 'r') as file:
-        # Use safe_load to safely parse the YAML content
-        configuration = yaml.safe_load(file)
-    
-    return configuration
+        # sample params using ranges from config
+        for param in config:
+            param_config = config[param]
+            if param_config["type"] == "int":
+                sample = random.randint
+            else:
+                sample = random.uniform
 
+            params[param] = sample(param_config["min"], param_config["max"])
 
-def initialise() -> None:
-    """
-    Function to initialise the Designs directory structure.
-    @author: Stephen Krol
-    @date: Jan 2026
-    """
+        # calculate remaining params
+        params["dt"] = 1.0 / (params["fb"] * max(params["frx"], params["fry"] * params["sampleRate"]))
 
-    if not os.path.exists("Designs"):
-        os.mkdir("Designs")
+        # spaceP
+        params["spaceP"] = 10**params["spaceD"]
 
-    if not os.path.exists("Designs/Images"):
-        os.mkdir("Designs/Images")
-    
-    if not os.path.exists("Designs/Params"):
-        os.mkdir("Designs/Params")
+        # algorithm
+        params["algorithm"] = random.choice(["SINE", "POW", "SINEOSC", "NOISE", "FRACTAL", "OSC", "TURB", "PHASE"])
 
-def initialise_design(name: str):
-    """
-    Function initialises directories for a specific design population.
-    @author: Stephen Krol
-    @date: Jan 2026
-    
-    :param name: Name of population
-    :type name: str
-    """
+        # radial set to 0
+        params["radial"] = 0
+        
 
-    if not os.path.exists(f"Designs/Images/{name}"):
-        os.mkdir(f"Designs/Images/{name}")
-    
-    if not os.path.exists(f"Designs/Params/{name}"):
-        os.mkdir(f"Designs/Params/{name}")
+        return params
 
-def generate_image(jobs: Tuple[str, str, str, bool]) -> None:
-    """
-    Generate image calls processing to generate an image from parameters.
-    Arguments are passed as a tuple for compatibility with ProcessPoolExecutor.
-    @author: Stephen Krol
-    @date: Jan 2026
-    
-    :param jobs: A tuple containing the arguments for generation. 
-        Arg1 is population name, Arg2 is filename, Arg3 is sketch directory,
-        Arg4 is screen boolean.
-    :type jobs: Tuple[str, str, str, bool]
+    def _write_json(self, 
+                   params: dict,
+                   filepath: str,
+                   filename: str,
+                   population_name: str) -> None:
+        """
+        Method writes parameters to a JSON file.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param params: parameters in dictionary format
+        :type params: dict
+        :param filepath: Path to the directory where the JSON file will be saved
+        :type filepath: str
+        :param filename: Name of the JSON file to be created
+        :type filename: str
+        :param population_name: Name of the population being generated
+        :type population_name: str
+        @author: Stephen Krol
+        @date: Jan 2026
 
-    :return: None
-    :rtype: None
-    """
+        :returns: None
+        :rtype: None
+        """
 
-    population_name, filename, sketch_dir, screen = jobs
+        full_path = f"{filepath}/{filename}"
 
-    cwd = os.getcwd()
-
-    # if screen is available
-    if screen:
-        subprocess.run([
-            "processing-java",
-            f"--sketch={sketch_dir}",
-            "--run",
-            f"{cwd}/Designs/Params/{population_name}/{filename}.json"], 
-            check=True,
-            cwd=cwd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL)
-    else:
-        subprocess.run([
-            "xvfb-run", "-a",
-            "--server-args=-screen 0 1024x768x24 -nolisten tcp",
-            "processing-java",
-            f"--sketch={sketch_dir}",
-            "--run",
-            f"{cwd}/Designs/Params/{population_name}/{filename}.json"], 
-            check=True,
-            cwd=cwd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL)
-
-def generate_population(n: int,
-                        name: str,
-                        config: dict,
-                        sketch_dir: str, 
-                        processing: str="serial",
-                        screen: bool=False,
-                        workers: int=8) -> list:
-    """
-    Function generates a population of designs.
-    @author: Stephen Krol
-    @date: Jan 2026
-    
-    :param n: Number of designs to generate.
-    :type n: int
-    :param name: Name of the population.
-    :type name: str
-    :param config: Configuration parameters for the generation.
-    :type config: dict
-    :param sketch_dir: Directory containing the Processing sketch.
-    :type sketch_dir: str
-    :param processing: Either 'serial' or 'parallel' processing.
-    :type processing: str
-    :param screen: Whether processing has access to a display.
-    :type screen: bool
-    :param workers: Number of workers for parallel processing.
-    :type workers: int
-    
-    :return: List of generated image filenames.
-    :rtype: list
-    """
-
-    initialise_design(name)
-
-    start = time.time()
-    jobs = []
-
-    # write JSON
-    for i in tqdm(range(n)):
-        params = generate_rand_params(config)
-        filename = f"{name}_{i}"
-        write_json(params, f"Designs/Params/{name}", f"{filename}", name)
-        jobs.append((name, filename, sketch_dir, screen))
-
-    # generate images serially
-    if processing == "serial":
-        for job in tqdm(jobs):
-            generate_image(job)
-    elif processing == "parallel":
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            pool.map(generate_image, jobs)
-    else:
-        raise ValueError("Processing must be 'serial' or 'parallel'")
-    
-    end = time.time()
-
-    print(f"Took {end - start:.2f} seconds to generate {n} designs.")
+        with open(f'{full_path}.json', 'w') as f:
+            json.dump({"parameters": params, 
+                    "filename": filename, 
+                    "population_name": population_name,
+                    "base" : os.getcwd()}, f, indent=4)
 
 
-    return os.listdir(f"Designs/Images/{name}")
+# def evaluate_population(filenames: list,
+#                         root: str,
+#                         prompt: str) -> list:
+
+#     jobs = build_messages(filenames,
+#                           root,
+#                           prompt)
+
+#     return
 
 if __name__ == "__main__":
 
 
     # Example usage
-    initialise()
+    generator = DesignGenerator(
+        spec_filepath="param_spec.yaml",
+        sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
+        processing="parallel",
+        screen=False,
+        workers=8
+    )
 
-    config = read_param_spec("param_spec.yaml")
-
-    # for _ in range(10):
-    #     generate_population(n=10, name="test",config=config)
-
-    # generate_population(n=20,
-    #                     name="test",
-    #                     config=config,
-    #                     sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
-    #                     processing="parallel",
-    #                     screen=False,
-    #                     workers=8)
+    designs = generator.generate_population(n=20, name="test2")
+    
+    # evaluate_population(designs,)
 
     # filename = "design0"
     # initialise_design(filename)
