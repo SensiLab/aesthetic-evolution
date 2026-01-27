@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 from typing import Tuple
+from utils import build_messages
 
 # currently not in use, would be good to fix types
 @dataclass()
@@ -42,7 +43,24 @@ class Params:
 def write_json(params: dict,
                filepath: str,
                filename: str,
-               population_name: str):
+               population_name: str) -> None:
+    """
+    Function writes parameters to a JSON file.
+    
+    :param params: parameters in dictionary format
+    :type params: dict
+    :param filepath: Path to the directory where the JSON file will be saved
+    :type filepath: str
+    :param filename: Name of the JSON file to be created
+    :type filename: str
+    :param population_name: Name of the population being generated
+    :type population_name: str
+    @author: Stephen Krol
+    @date: Jan 2026
+
+    :returns: None
+    :rtype: None
+    """
 
     full_path = f"{filepath}/{filename}"
 
@@ -54,6 +72,17 @@ def write_json(params: dict,
 
 
 def generate_rand_params(config: dict) -> dict:
+    """
+    Function generates random parameters for sample.
+    @author: Stephen Krol
+    @date: Jan 2026
+    
+    :param config: A dictionary defining parameter ranges and types.
+    :type config: dict
+
+    :return: Dictionary of generated random parameters.
+    :rtype: dict
+    """
 
     params = {}
 
@@ -83,6 +112,17 @@ def generate_rand_params(config: dict) -> dict:
     return params
 
 def read_param_spec(spec_filepath: str) -> dict:
+    """
+    Function reads parameter specification from a YAML file.
+    @author: Stephen Krol
+    @date: Jan 2026
+    
+    :param spec_filepath: Filepath to the YAML specification file.
+    :type spec_filepath: str
+
+    :return: Parameter specification as a dictionary.
+    :rtype: dict
+    """
 
     # Use a context manager to open and automatically close the file
     with open(spec_filepath, 'r') as file:
@@ -92,7 +132,12 @@ def read_param_spec(spec_filepath: str) -> dict:
     return configuration
 
 
-def initialise():
+def initialise() -> None:
+    """
+    Function to initialise the Designs directory structure.
+    @author: Stephen Krol
+    @date: Jan 2026
+    """
 
     if not os.path.exists("Designs"):
         os.mkdir("Designs")
@@ -104,6 +149,14 @@ def initialise():
         os.mkdir("Designs/Params")
 
 def initialise_design(name: str):
+    """
+    Function initialises directories for a specific design population.
+    @author: Stephen Krol
+    @date: Jan 2026
+    
+    :param name: Name of population
+    :type name: str
+    """
 
     if not os.path.exists(f"Designs/Images/{name}"):
         os.mkdir(f"Designs/Images/{name}")
@@ -111,7 +164,21 @@ def initialise_design(name: str):
     if not os.path.exists(f"Designs/Params/{name}"):
         os.mkdir(f"Designs/Params/{name}")
 
-def generate_image(jobs: Tuple[str, str, str, str]):
+def generate_image(jobs: Tuple[str, str, str, bool]) -> None:
+    """
+    Generate image calls processing to generate an image from parameters.
+    Arguments are passed as a tuple for compatibility with ProcessPoolExecutor.
+    @author: Stephen Krol
+    @date: Jan 2026
+    
+    :param jobs: A tuple containing the arguments for generation. 
+        Arg1 is population name, Arg2 is filename, Arg3 is sketch directory,
+        Arg4 is screen boolean.
+    :type jobs: Tuple[str, str, str, bool]
+
+    :return: None
+    :rtype: None
+    """
 
     population_name, filename, sketch_dir, screen = jobs
 
@@ -147,7 +214,30 @@ def generate_population(n: int,
                         sketch_dir: str, 
                         processing: str="serial",
                         screen: bool=False,
-                        workers: int=8) -> None:
+                        workers: int=8) -> list:
+    """
+    Function generates a population of designs.
+    @author: Stephen Krol
+    @date: Jan 2026
+    
+    :param n: Number of designs to generate.
+    :type n: int
+    :param name: Name of the population.
+    :type name: str
+    :param config: Configuration parameters for the generation.
+    :type config: dict
+    :param sketch_dir: Directory containing the Processing sketch.
+    :type sketch_dir: str
+    :param processing: Either 'serial' or 'parallel' processing.
+    :type processing: str
+    :param screen: Whether processing has access to a display.
+    :type screen: bool
+    :param workers: Number of workers for parallel processing.
+    :type workers: int
+    
+    :return: List of generated image filenames.
+    :rtype: list
+    """
 
     initialise_design(name)
 
@@ -175,6 +265,9 @@ def generate_population(n: int,
 
     print(f"Took {end - start:.2f} seconds to generate {n} designs.")
 
+
+    return os.listdir(f"Designs/Images/{name}")
+
 if __name__ == "__main__":
 
 
@@ -186,13 +279,13 @@ if __name__ == "__main__":
     # for _ in range(10):
     #     generate_population(n=10, name="test",config=config)
 
-    generate_population(n=20,
-                        name="test",
-                        config=config,
-                        sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
-                        processing="serial",
-                        screen=False,
-                        workers=8)
+    # generate_population(n=20,
+    #                     name="test",
+    #                     config=config,
+    #                     sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
+    #                     processing="parallel",
+    #                     screen=False,
+    #                     workers=8)
 
     # filename = "design0"
     # initialise_design(filename)
@@ -227,8 +320,3 @@ if __name__ == "__main__":
 
     # write_json(params, f"Designs/Params/{filename}", filename)
     # generate_image(filename)
-
-
-    
-
-
