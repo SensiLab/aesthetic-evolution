@@ -53,6 +53,7 @@ class DesignGenerator:
     """
 
     def __init__(self, 
+                 experiment_name: str,
                  spec_filepath: str,
                  sketch_dir: str,
                  processing: str = "serial",
@@ -62,6 +63,8 @@ class DesignGenerator:
         Constructor for DesignGenerator class.
         
         :param self: Current instance of the class. 
+        :param experiment_name: Name of the experiment.
+        :type experiment_name: str
         :param spec_filepath: Description
         :type spec_filepath: str
         :param sketch_dir: Directory containing the Processing sketch.
@@ -78,6 +81,7 @@ class DesignGenerator:
         """
 
         # initialise folder structure
+        self.experiment_name = experiment_name
         self._initialise()
 
         # read param spec
@@ -98,7 +102,9 @@ class DesignGenerator:
         assert isinstance(workers, int) and workers > 0, "Workers must be a positive integer"
         self.workers = workers
 
-    def generate_population(self, n: int, name: str) -> list:
+    def generate_population(self, n: int, 
+                            name: str,
+                            inital_populaion: bool = False) -> list:
         """
         Method generates a population of designs.
         @author: Stephen Krol
@@ -109,23 +115,30 @@ class DesignGenerator:
         :type n: int
         :param name: Name of the population.
         :type name: str
+        :param inital_populaion: Whether this is the initial population.
+        :type inital_populaion: bool
 
         :return: List of generated image filenames.
         :rtype: list
         """
 
-        # initialise design directories
-        self._initialise_design(name)
-
         start = time.time()
         jobs = []
 
-        # write JSON parameters for processing
-        for i in tqdm(range(n)):
-            params = self._generate_initial_params(self.param_spec)
-            filename = f"{name}_{i}"
-            self._write_json(params, f"Designs/Params/{name}", f"{filename}", name)
-            jobs.append((name, filename, self.sketch_dir, self.screen))
+        base_filepath = f"Experiments/{self.experiment_name}/{name}"
+
+        # write JSON parameters for initial population
+        if inital_populaion:
+            print("Generating initial population...")
+            assert name == "run0", "Initial population name must be 'run0'"
+
+            for i in tqdm(range(n)):
+                params = self._generate_initial_params(self.param_spec)
+                filename = f"{name}_{i}"
+                self._write_json(params, f"{base_filepath}/Params", f"{filename}", name)
+                jobs.append((name, filename, self.sketch_dir, self.experiment_name, self.screen))
+
+            print("Initial population parameters written.")
         
         if self.processing == "serial": # generate images serially
             for job in tqdm(jobs):
@@ -139,10 +152,10 @@ class DesignGenerator:
 
         print(f"Took {end - start:.2f} seconds to generate {n} designs.")
 
-        return os.listdir(f"Designs/Images/{name}")
+        return os.listdir(f"{base_filepath}/Images")
 
     @staticmethod
-    def generate_image(jobs: Tuple[str, str, str, bool]) -> None:
+    def generate_image(jobs: Tuple[str, str, str, str, bool]) -> None:
         """
         Generate image calls processing to generate an image from parameters.
         Arguments are passed as a tuple for compatibility with ProcessPoolExecutor.
@@ -151,16 +164,17 @@ class DesignGenerator:
         
         :param jobs: A tuple containing the arguments for generation. 
             Arg1 is population name, Arg2 is filename, Arg3 is sketch directory,
-            Arg4 is screen boolean.
-        :type jobs: Tuple[str, str, str, bool]
+            Arg4 is experiment name, Arg5 is screen boolean.
+        :type jobs: Tuple[str, str, str, str, bool]
 
         :return: None
         :rtype: None
         """
 
-        population_name, filename, sketch_dir, screen = jobs
+        population_name, filename, sketch_dir, experiment_name, screen = jobs
 
         cwd = os.getcwd()
+        filepath = f"{cwd}/Experiments/{experiment_name}/{population_name}/Params/{filename}.json"
 
         # if screen is available
         if screen:
@@ -168,7 +182,7 @@ class DesignGenerator:
                 "processing-java",
                 f"--sketch={sketch_dir}",
                 "--run",
-                f"{cwd}/Designs/Params/{population_name}/{filename}.json"], 
+                filepath], 
                 check=True,
                 cwd=cwd,
                 stdout=subprocess.DEVNULL,
@@ -180,12 +194,12 @@ class DesignGenerator:
                 "processing-java",
                 f"--sketch={sketch_dir}",
                 "--run",
-                f"{cwd}/Designs/Params/{population_name}/{filename}.json"], 
+                filepath], 
                 timeout=20,
                 check=True,
-                cwd=cwd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL)
+                cwd=cwd)
+                # stdout=subprocess.DEVNULL,
+                # stderr=subprocess.DEVNULL)
 
     def _initialise(self) -> None:
         """
@@ -199,15 +213,21 @@ class DesignGenerator:
         :rtype: None
         """
 
-        if not os.path.exists("Designs"):
-            os.mkdir("Designs")
+        if not os.path.exists("Experiments"):
+            os.mkdir("Experiments")
 
-        if not os.path.exists("Designs/Images"):
-            os.mkdir("Designs/Images")
-        
-        if not os.path.exists("Designs/Params"):
-            os.mkdir("Designs/Params")
-    
+        if not os.path.exists(f"Experiments/{self.experiment_name}"):
+            os.mkdir(f"Experiments/{self.experiment_name}")
+
+        if not os.path.exists(f"Experiments/{self.experiment_name}/run0"):
+            os.mkdir(f"Experiments/{self.experiment_name}/run0")
+
+        if not os.path.exists(f"Experiments/{self.experiment_name}/run0/Images"):
+            os.mkdir(f"Experiments/{self.experiment_name}/run0/Images")
+
+        if not os.path.exists(f"Experiments/{self.experiment_name}/run0/Params"):
+            os.mkdir(f"Experiments/{self.experiment_name}/run0/Params")
+
     def _initialise_design(self, name: str):
         """
         Method initialises directories for a specific design population.
@@ -318,12 +338,11 @@ class DesignGenerator:
         """
 
         full_path = f"{filepath}/{filename}"
+        image_path = f"{os.getcwd()}/Experiments/{self.experiment_name}/{population_name}/Images/{filename}.png"
 
         with open(f'{full_path}.json', 'w') as f:
             json.dump({"parameters": params, 
-                    "filename": filename, 
-                    "population_name": population_name,
-                    "base" : os.getcwd()}, f, indent=4)
+                       "filepath": image_path}, f, indent=4)
             
 class DesignEvolver:
 
@@ -387,27 +406,29 @@ if __name__ == "__main__":
 
 
     # Example usage
-    # generator = DesignGenerator(
-    #     spec_filepath="param_spec.yaml",
-    #     sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
-    #     processing="parallel",
-    #     screen=False,
-    #     workers=8
-    # )
-
-    # designs = generator.generate_population(n=20, name="test2")
-    designs = os.listdir("Designs/Images/test2")
-
-    evolver = DesignEvolver(
-        design_path="/home/sjkro1/ARC-Discovery/aesthetic-evolution/Designs",
-        prompt="""
-        You will be given two images and you need to output either '1' or '2' based on which image is more aesthetically pleasing.
-        Designs with interesting patterns should be rated higher. Penalise designs that are too noisy and messy or dark blops. Focus on ranking patterns
-        that have complex structures that are visible as higher.
-        """
+    generator = DesignGenerator(
+        experiment_name="test_experiment",
+        spec_filepath="param_spec.yaml",
+        sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
+        processing="parallel",
+        screen=False,
+        workers=8
     )
 
-    jobs = evolver.evaluate_population(np.array(designs), "test2")
+    designs = generator.generate_population(n=20, name="run0", inital_populaion=True)
+
+    # designs = os.listdir("Designs/Images/test2")
+
+    # evolver = DesignEvolver(
+    #     design_path="/home/sjkro1/ARC-Discovery/aesthetic-evolution/Designs",
+    #     prompt="""
+    #     You will be given two images and you need to output either '1' or '2' based on which image is more aesthetically pleasing.
+    #     Designs with interesting patterns should be rated higher. Penalise designs that are too noisy and messy or dark blops. Focus on ranking patterns
+    #     that have complex structures that are visible as higher.
+    #     """
+    # )
+
+    # jobs = evolver.evaluate_population(np.array(designs), "test2")
 
     # evaluate_population(designs,)
 
