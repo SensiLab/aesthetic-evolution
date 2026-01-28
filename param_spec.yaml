@@ -9,7 +9,8 @@ sampleRate:
 ab:
   type: int
   min: 0
-  max: 500
+  max: 200
+  # max: 500 # original
 as:
   type: float
   min: -1
