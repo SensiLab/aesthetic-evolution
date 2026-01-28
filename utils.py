@@ -2,10 +2,11 @@
 Utility functions for image comparison and ranking.
 """
 
-
+import os
 import numpy as np
 from dataclasses import dataclass
 from typing import List
+from matplotlib import pyplot as plt
 
 
 @dataclass
@@ -20,8 +21,10 @@ def build_messages(data: np.ndarray,
                    root: str,
                    prompt: str) -> List[ComparisonJob]:
     """
-    Docstring for build_messages. Function takes a list of images
-    and builds comparison jobs for all unique pairs.
+    Function takes a list of images and builds comparison jobs
+    for all unique pairs.
+    @author: Stephen Krol
+    @Date: Jan 2026
     
     :param data: Array containing filenames for images.
     :type data: np.array
@@ -50,7 +53,9 @@ def build_messages(data: np.ndarray,
 
 def calc_ranks(results: List[dict], n: int):
     """
-    Docstring for calc_ranks.
+    Function calculates the rank scores for each image based on comparison results.
+    @atuthor: Stephen Krol
+    @Date: Jan 2026
     
     :param results: List of result dictionaries from comparison jobs.
     :type results: List[Dict]
@@ -70,3 +75,38 @@ def calc_ranks(results: List[dict], n: int):
             ranks[j, i] += 1
 
     return ranks.sum(axis=1)
+
+def plot_image_grid(filenames: list,
+                    nrows: int,
+                    ncols: int,
+                    filepath=str,
+                    ranks=None):
+    """
+    Function plots a grid of images with an option to display ranks.
+    @author: Stephen Krol
+    @Date: Jan 2026
+
+    :param filenames: List of image filenames to plot.
+    :type filenames: list like
+    :param nrows: Number of rows in the grid.
+    :type nrows: int
+    :param ncols: Number of columns in the grid.
+    :type ncols: int
+    :param filepath: Path to the directory containing the images.
+    :type filepath: str
+    :param ranks: Optional list of rank scores for each image.
+    :type ranks: list like or None
+    """
+    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 10))
+    for i in range(nrows):
+        for j in range(ncols):
+            idx = i * ncols + j
+            img = plt.imread(os.path.join(filepath, filenames[idx]))
+            ax[i, j].imshow(img)
+            if ranks is not None:
+                ax[i, j].set_title(f"{filenames[idx].split('_')[-1].strip('.png')} : {ranks[idx]}")
+            else:
+                ax[i, j].set_title(filenames[idx].split('_')[-1].strip('.png'))
+            ax[i, j].axis('off')
+    plt.tight_layout()
+    plt.savefig("Rankings.png")

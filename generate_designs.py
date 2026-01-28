@@ -1,16 +1,21 @@
 
-import os
+
 import json
-import time
 import math
-import yaml
+import numpy as np
+import os
 import random
 import subprocess
+import time
+import torch
+import yaml
+
+from utils import build_messages, calc_ranks, plot_image_grid
 from dataclasses import dataclass
-from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
+from process_batch import Qwen3VLBatchProcessor
 from typing import Tuple
-from utils import build_messages
+from tqdm import tqdm
 
 # currently not in use, would be good to fix types
 @dataclass()
@@ -42,6 +47,10 @@ class Params:
 
 
 class DesignGenerator:
+    """
+    DesignGenerator class to generate design images using Processing. Can generate populations
+    in both serial and parallel modes.
+    """
 
     def __init__(self, 
                  spec_filepath: str,
@@ -315,32 +324,91 @@ class DesignGenerator:
                     "filename": filename, 
                     "population_name": population_name,
                     "base" : os.getcwd()}, f, indent=4)
+            
+class DesignEvolver:
 
+    def __init__(self, design_path: str, prompt: str) -> None:
+                 
+        # verify design path exists and assign
+        assert os.path.exists(design_path), "Design path does not exist"
+        self.design_path = design_path
 
-# def evaluate_population(filenames: list,
-#                         root: str,
-#                         prompt: str) -> list:
+        # assign prompt
+        self.prompt = prompt
 
-#     jobs = build_messages(filenames,
-#                           root,
-#                           prompt)
+        # initialise processor
+        self.processor = Qwen3VLBatchProcessor(
+                model_name="Qwen/Qwen3-VL-7B-Instruct",
+                device="cuda" if torch.cuda.is_available() else "cpu"
+                )
 
-#     return
+    def evaluate_population(self, 
+                            filenames: np.ndarray,
+                            population_name: str,
+                            plot: bool = True) -> np.ndarray:
+        """
+        Evaluate population ranks images using LLM comparisons.
+        @author: Stephen Krol
+        @Date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param filenames: Array of filenames to evaluate.
+        :type filenames: np.ndarray
+        :param population_name: Name of the population being evaluated
+        :type population_name: str
+        :param plot: Whether to plot the images
+        :type plot: bool
+
+        :return: Array of filenames sorted by aesthetic rank.
+        :rtype: ndarray[n, str]
+        """
+        
+        assert type(filenames) == np.ndarray, "Filenames must be a numpy array"
+
+        population_image_fileapath = f"{self.design_path}/Images/{population_name}"
+
+        # build comparison jobs
+        jobs = build_messages(filenames, population_image_fileapath, self.prompt)
+
+        # rank images using LLM
+        results = self.processor.process_batch_chunked(jobs, chunk_size=32)
+
+        # calculate ranks
+        ranks = calc_ranks(results, len(filenames))
+        sorted_idx = np.argsort(ranks)[::-1]
+
+        # plot images
+        if plot:
+            plot_image_grid(filenames[sorted_idx], nrows=5, ncols=4, filepath=population_image_fileapath, ranks=ranks[sorted_idx])
+
+        return filenames[sorted_idx]
 
 if __name__ == "__main__":
 
 
     # Example usage
-    generator = DesignGenerator(
-        spec_filepath="param_spec.yaml",
-        sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
-        processing="parallel",
-        screen=False,
-        workers=8
+    # generator = DesignGenerator(
+    #     spec_filepath="param_spec.yaml",
+    #     sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
+    #     processing="parallel",
+    #     screen=False,
+    #     workers=8
+    # )
+
+    # designs = generator.generate_population(n=20, name="test2")
+    designs = os.listdir("Designs/Images/test2")
+
+    evolver = DesignEvolver(
+        design_path="/home/sjkro1/ARC-Discovery/aesthetic-evolution/Designs",
+        prompt="""
+        You will be given two images and you need to output either '1' or '2' based on which image is more aesthetically pleasing.
+        Designs with interesting patterns should be rated higher. Penalise designs that are too noisy and messy or dark blops. Focus on ranking patterns
+        that have complex structures that are visible as higher.
+        """
     )
 
-    designs = generator.generate_population(n=20, name="test2")
-    
+    jobs = evolver.evaluate_population(np.array(designs), "test2")
+
     # evaluate_population(designs,)
 
     # filename = "design0"
