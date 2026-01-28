@@ -127,19 +127,22 @@ class DesignGenerator:
 
         base_filepath = f"Experiments/{self.experiment_name}/{name}"
 
-        # write JSON parameters for initial population
         if inital_populaion:
-            print("Generating initial population...")
             assert name == "run0", "Initial population name must be 'run0'"
+            print("Generating initial population...")
 
-            for i in tqdm(range(n)):
+        # build jobs for generation
+        for i in tqdm(range(n)):
+
+            filename = f"{name}_{i}"
+
+            # write JSON parameters for initial population
+            if inital_populaion:
                 params = self._generate_initial_params(self.param_spec)
-                filename = f"{name}_{i}"
                 self._write_json(params, f"{base_filepath}/Params", f"{filename}", name)
-                jobs.append((name, filename, self.sketch_dir, self.experiment_name, self.screen))
 
-            print("Initial population parameters written.")
-        
+            jobs.append((name, filename, self.sketch_dir, self.experiment_name, self.screen))
+
         if self.processing == "serial": # generate images serially
             for job in tqdm(jobs):
                 self.generate_image(job)
@@ -197,9 +200,9 @@ class DesignGenerator:
                 filepath], 
                 timeout=20,
                 check=True,
-                cwd=cwd)
-                # stdout=subprocess.DEVNULL,
-                # stderr=subprocess.DEVNULL)
+                cwd=cwd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
 
     def _initialise(self) -> None:
         """
