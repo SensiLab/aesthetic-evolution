@@ -17,34 +17,129 @@ from process_batch import Qwen3VLBatchProcessor
 from typing import Tuple
 from tqdm import tqdm
 
-# currently not in use, would be good to fix types
-@dataclass()
+
 class Params:
-    steps: int = 25
-    sampleRate: float = 50.0
-    ab: int = 300
-    ampSkew: float = 0.0
-    fb: int = 2
-    frx: float = 1.0
-    fry: float = 1.0
-    px: float = 0.0
-    py: float = math.pi / 2
-    dx: float = 0.1
-    dy: float = 0.1
-    dt: float = 1.0/(2 * 1.0 * 50.0)
-    radial: int = 0
-    no: int = 1
-    lac: float = 2.0
-    fo: float = 0.5
-    mix: float = 0.1
-    spaceD: float = 0.0
-    spaceP: float = 1
-    algorithm: str = "SINE"
 
-    def __getitem__(self, item):
-        """Allows accessing fields using subscript notation (e.g., product['name'])."""
-        return getattr(self, item)
+    def __init__(self, 
+                 parameters: dict, 
+                 params_config: dict,
+                 experiment_name: str, 
+                 name: str) -> None:
 
+        # check filepath exists
+        self.params = parameters
+        self.params_config = params_config
+
+        # assign name and experiment
+        self.name = name
+        self.experiment_name = experiment_name
+
+        # categorise parameters by type
+        self.float_params = [param for param in self.params_config if self.params_config[param]["type"] == "float"]
+        self.int_params = [param for param in self.params_config if self.params_config[param]["type"] == "int"]
+        self.categorical_params = [param for param in self.params_config if self.params_config[param]["type"] == "categorical"]
+
+
+    def breed(self, other: "Params", alpha: float, child_name: str) -> dict:
+
+        assert 0 <= alpha <= 1, "Alpha must be between 0 and 1"
+
+        # TODO: arthimitic mean currently does not consider ranking between parents,
+        # making it harder to weight higher ranked parents more heavily.
+        child = Params({}, self.params_config, self.experiment_name, child_name)
+
+        # calculate arthimitic mean of float parameters
+        for param in self.float_params:
+            child.params[param] = alpha * self.params[param] + (1 - alpha) * other.params[param]
+        
+        # calculate arthimitic mean of int parameters and round
+        for param in self.int_params:
+            child.params[param] = round(alpha * self.params[param] + (1 - alpha) * other.params[param])
+        
+        # TODO: option to not cross over categorical parameters and instead inherit from one parent
+        # randomly select categorical parameters from either parent
+        for param in self.categorical_params:
+            child.params[param] = random.choice([self.params[param], other.params[param]])
+
+        # calculate dependent parameters
+        child.params["dt"] = self._calculate_dt(child.params)
+        child.params["spaceP"] = self._calculate_spaceP(child.params)
+        child.params["radial"] = 0
+
+        return child
+
+    def mutate(self, mutation_rate: float) -> None:
+
+        # float and int mutation
+        for param in (self.float_params + self.int_params):
+            if random.random() < mutation_rate:
+                
+                # gaussian mutation
+                a, b = self.params_config[param]["min"], self.params_config[param]["max"]
+                z = (self.params[param] - a) / (b - a)
+                z += random.gauss(0, 0.1)
+                z = min(max(z, 0), 1)
+                x = a + z * (b - a)
+
+                if self.params_config[param]["type"] == "int":
+                    self.params[param] = round(x)
+                else:   
+                    self.params[param] = x
+        
+        # categorical mutation
+        for param in self.categorical_params:
+            if random.random() < mutation_rate:
+                self.params[param] = random.choice(self.params_config[param]["values"])
+
+        # recalculate dependent parameters
+        self.params["dt"] = self._calculate_dt(self.params)
+        self.params["spaceP"] = self._calculate_spaceP(self.params)
+
+
+    def write_json(self, 
+                   filepath: str,
+                   filename: str,
+                   population_name: str) -> None:
+        """
+        Method writes parameters to a JSON file.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param params: parameters in dictionary format
+        :type params: dict
+        :param filepath: Path to the directory where the JSON file will be saved
+        :type filepath: str
+        :param filename: Name of the JSON file to be created
+        :type filename: str
+        :param population_name: Name of the population being generated
+        :type population_name: str
+        @author: Stephen Krol
+        @date: Jan 2026
+
+        :returns: None
+        :rtype: None
+        """
+
+        full_path = f"{filepath}/{filename}"
+        image_path = f"{os.getcwd()}/Experiments/{self.experiment_name}/{population_name}/Images/{filename}.png"
+
+        with open(f'{full_path}.json', 'w') as f:
+            json.dump({"parameters": self.params, 
+                       "filepath": image_path}, f, indent=4)
+    
+    def print_params(self) -> None:
+        """
+        Method prints the parameters to the console.
+        """
+        for key, value in self.params.items():
+            print(f"{key}: {value}")
+
+    def _calculate_dt(self, params) -> float:
+        return 1.0 / (params["fb"] * max(params["frx"], params["fry"] * params["sampleRate"]))
+    
+    def _calculate_spaceP(self, params) -> float:
+        return 10**params["spaceD"]
 
 class DesignGenerator:
     """
@@ -103,8 +198,8 @@ class DesignGenerator:
         self.workers = workers
 
     def generate_population(self, n: int, 
-                            name: str,
-                            inital_populaion: bool = False) -> list:
+                            pop_name: str,
+                            inital_populaion: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """
         Method generates a population of designs.
         @author: Stephen Krol
@@ -113,35 +208,39 @@ class DesignGenerator:
         :param self: Current instance of the class.
         :param n: Number of designs to generate.
         :type n: int
-        :param name: Name of the population.
-        :type name: str
+        :param pop_name: Name of the population.
+        :type pop_name: str
         :param inital_populaion: Whether this is the initial population.
         :type inital_populaion: bool
 
-        :return: List of generated image filenames.
-        :rtype: list
+        :return: Tuple of generated image filenames and parameter filenames.
+        :rtype: Tuple[np.ndarray, np.ndarray]
         """
+
+        assert n % 2 == 0, "Number of designs 'n' must be even."
 
         start = time.time()
         jobs = []
 
-        base_filepath = f"Experiments/{self.experiment_name}/{name}"
+        base_filepath = f"Experiments/{self.experiment_name}/{pop_name}"
 
         if inital_populaion:
-            assert name == "run0", "Initial population name must be 'run0'"
+            assert pop_name == "run0", "Initial population name must be 'run0'"
             print("Generating initial population...")
 
         # build jobs for generation
         for i in tqdm(range(n)):
 
-            filename = f"{name}_{i}"
+            filename = f"{pop_name}_{i}"
 
             # write JSON parameters for initial population
             if inital_populaion:
                 params = self._generate_initial_params(self.param_spec)
-                self._write_json(params, f"{base_filepath}/Params", f"{filename}", name)
 
-            jobs.append((name, filename, self.sketch_dir, self.experiment_name, self.screen))
+                individual = Params(params, self.param_spec, self.experiment_name, filename)
+                individual.write_json(f"{base_filepath}/Params", f"{filename}", pop_name)
+
+            jobs.append((pop_name, filename, self.sketch_dir, self.experiment_name, self.screen))
 
         if self.processing == "serial": # generate images serially
             for job in tqdm(jobs):
@@ -155,7 +254,11 @@ class DesignGenerator:
 
         print(f"Took {end - start:.2f} seconds to generate {n} designs.")
 
-        return os.listdir(f"{base_filepath}/Images")
+        # ensuring images and param arrays are in the same order
+        images = os.listdir(f"{base_filepath}/Images")
+        params = [f"{image.strip(".png")}.json" for image in images]
+
+        return np.array(images), np.array(params)
 
     @staticmethod
     def generate_image(jobs: Tuple[str, str, str, str, bool]) -> None:
@@ -292,7 +395,12 @@ class DesignGenerator:
         # sample params using ranges from config
         for param in config:
             param_config = config[param]
-            if param_config["type"] == "int":
+            if param_config["calc"] == True:
+                continue
+            elif param_config["type"] == "categorical":
+                params[param] = random.choice(param_config["values"])
+                continue
+            elif param_config["type"] == "int":
                 sample = random.randint
             else:
                 sample = random.uniform
@@ -304,55 +412,19 @@ class DesignGenerator:
 
         # spaceP
         params["spaceP"] = 10**params["spaceD"]
-
-        # algorithm
-        params["algorithm"] = random.choice(["SINE", "POW", "SINEOSC", "NOISE", "FRACTAL", "OSC", "TURB", "PHASE"])
-
-        # radial set to 0
-        params["radial"] = 0
         
-
         return params
-
-    def _write_json(self, 
-                   params: dict,
-                   filepath: str,
-                   filename: str,
-                   population_name: str) -> None:
-        """
-        Method writes parameters to a JSON file.
-        @author: Stephen Krol
-        @date: Jan 2026
-        
-        :param self: Current instance of the class.
-        :param params: parameters in dictionary format
-        :type params: dict
-        :param filepath: Path to the directory where the JSON file will be saved
-        :type filepath: str
-        :param filename: Name of the JSON file to be created
-        :type filename: str
-        :param population_name: Name of the population being generated
-        :type population_name: str
-        @author: Stephen Krol
-        @date: Jan 2026
-
-        :returns: None
-        :rtype: None
-        """
-
-        full_path = f"{filepath}/{filename}"
-        image_path = f"{os.getcwd()}/Experiments/{self.experiment_name}/{population_name}/Images/{filename}.png"
-
-        with open(f'{full_path}.json', 'w') as f:
-            json.dump({"parameters": params, 
-                       "filepath": image_path}, f, indent=4)
             
 class DesignEvolver:
 
-    def __init__(self, design_path: str, prompt: str) -> None:
+    def __init__(self, 
+                 design_path: str,
+                 prompt: str,
+                 initial_pop_param_list: list,
+                 k: int) -> None:
                  
         # verify design path exists and assign
-        assert os.path.exists(design_path), "Design path does not exist"
+        assert os.path.exists(design_path), f"Design path: f{design_path} does not exist"
         self.design_path = design_path
 
         # assign prompt
@@ -363,6 +435,12 @@ class DesignEvolver:
                 model_name="Qwen/Qwen3-VL-7B-Instruct",
                 device="cuda" if torch.cuda.is_available() else "cpu"
                 )
+
+        # self.population_params 
+        self.population_params = [Params(f"{self.design_path}/run0/Params/{param}") for param in initial_pop_param_list]
+
+        # initialise ranking probabilities
+        self.ranking_probabilities = self._calc_ranking_probabilities(len(self.population_params), k)
 
     def evaluate_population(self, 
                             filenames: np.ndarray,
@@ -381,13 +459,13 @@ class DesignEvolver:
         :param plot: Whether to plot the images
         :type plot: bool
 
-        :return: Array of filenames sorted by aesthetic rank.
+        :return: idx array of sorted image indices.
         :rtype: ndarray[n, str]
         """
         
         assert type(filenames) == np.ndarray, "Filenames must be a numpy array"
 
-        population_image_fileapath = f"{self.design_path}/Images/{population_name}"
+        population_image_fileapath = f"{self.design_path}/{population_name}/Images"
 
         # build comparison jobs
         jobs = build_messages(filenames, population_image_fileapath, self.prompt)
@@ -403,63 +481,160 @@ class DesignEvolver:
         if plot:
             plot_image_grid(filenames[sorted_idx], nrows=5, ncols=4, filepath=population_image_fileapath, ranks=ranks[sorted_idx])
 
-        return filenames[sorted_idx]
+        # update population params, sorted in order of highest ranked phenotype
+        self.population_params = [Params(f"{self.design_path}/{population_name}/Params/{image.strip(".png")}.json") for image in filenames[sorted_idx]]
+
+        return sorted_idx
+    
+    def evolve_population(self):
+
+        # sample new population based on ranking probabilities derived from tournament selection
+        sampled_pop = random.choices(self.population_params, weights=self.ranking_probabilities, k=len(self.population_params))
+
+        # select N couples for crossover
+        sampled_couples = [random.choice(sampled_pop, k=2) for _ in range(len(sampled_pop) // 2)]
+
+        # perform crossover to create new population
+        children = []
+        for parent1, parent2 in sampled_couples:
+            alpha = random.uniform(0, 1) # TODO: might be a better method
+            child_params = parent1.breed(parent2, alpha)
+            children.append(child_params)
+         
+        # mutate children
+        mutation_rate = 0.1 # TODO: make this a parameter
+        for child in children:
+            child.mutate(mutation_rate)
+
+        return sampled_pop
+
+    def _calc_ranking_probabilities(self, N: int, k: int) -> np.ndarray:
+
+        r = np.arange(1, N+1)
+
+        # Probability of r-th item being the highest ranked in radomly selected k items
+        return (1 - (r - 1) / N) ** k - (1 - r / N) ** k 
 
 if __name__ == "__main__":
 
 
-    # Example usage
-    generator = DesignGenerator(
-        experiment_name="test_experiment",
-        spec_filepath="param_spec.yaml",
-        sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
-        processing="parallel",
-        screen=False,
-        workers=8
-    )
+    # # Example usage
+    # generator = DesignGenerator(
+    #     experiment_name="test_experiment",
+    #     spec_filepath="param_spec.yaml",
+    #     sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
+    #     processing="parallel",
+    #     screen=False,
+    #     workers=8
+    # )
 
-    designs = generator.generate_population(n=20, name="run0", inital_populaion=True)
+    # designs, params_json = generator.generate_population(n=20, pop_name="run0", inital_populaion=True)
 
-    # designs = os.listdir("Designs/Images/test2")
+    ############# START Evolver Example Usage #############
+
+    # designs = np.array(os.listdir("Experiments/test_experiment/run0/Images"))
+    # params = [f"{design.strip('.png')}.json" for design in designs]
 
     # evolver = DesignEvolver(
-    #     design_path="/home/sjkro1/ARC-Discovery/aesthetic-evolution/Designs",
+    #     design_path="/home/sjkro1/ARC-Discovery/aesthetic-evolution/Experiments/test_experiment",
     #     prompt="""
     #     You will be given two images and you need to output either '1' or '2' based on which image is more aesthetically pleasing.
     #     Designs with interesting patterns should be rated higher. Penalise designs that are too noisy and messy or dark blops. Focus on ranking patterns
     #     that have complex structures that are visible as higher.
-    #     """
+    #     """,
+    #     initial_pop_param_list=params,
+    #     k=5
     # )
 
-    # jobs = evolver.evaluate_population(np.array(designs), "test2")
+    # evolver.evaluate_population(designs, "run0", plot=True)
+
+    # selected = evolver.evolve_population()
+    # filenames = [design.name + ".png" for design in selected]
+    # plot_image_grid(filenames, nrows=5, ncols=4, filepath="/home/sjkro1/ARC-Discovery/aesthetic-evolution/Experiments/test_experiment/run0/Images", image_name='Selected Designs')
+
+
+    ############# END Evolver Example Usage #############
+
+
+    ############# TEST MUTATION AND BREEDING #############
+
+    p1 = {
+        "steps": 47,
+        "sampleRate": 286.8727917356732,
+        "ab": 167,
+        "as": 0.6994946486325484,
+        "fb": 17,
+        "frx": 1.7260021760064077,
+        "fry": 2.795336520899456,
+        "px": 2.231274673480362,
+        "py": -5.086525350173667,
+        "dx": 0.2410312493937298,
+        "dy": 0.006891169323498286,
+        "lac": 3.305891216047324,
+        "fo": 1.5091465083145679,
+        "mix": 0.6364773573733347,
+        "spaceD": -0.25884961893939207,
+        "no": 2,
+        "algorithm": "POW",
+        "radial": 0,
+        "dt": 7.335464509380872e-05,
+        "spaceP": 0.5509984549608025
+    }
+
+    p2 = {
+        "steps": 96,
+        "sampleRate": 191.902874002995,
+        "ab": 152,
+        "as": 0.3989198683872677,
+        "fb": 10,
+        "frx": 3.682748974321429,
+        "fry": 3.7008720162228705,
+        "px": 1.2206917814245841,
+        "py": 5.3443282627665525,
+        "dx": 0.1805668344718995,
+        "dy": 0.22006003144015002,
+        "lac": 9.120395325539539,
+        "fo": 1.880744852023576,
+        "mix": 0.5776249438474294,
+        "spaceD": 0.22630952557407635,
+        "no": 3,
+        "algorithm": "NOISE",
+        "radial": 0,
+        "dt": 0.00014080382556497074,
+        "spaceP": 1.6838737454341606
+    }
+
+
+    with open("param_spec.yaml", 'r') as file:
+        # Use safe_load to safely parse the YAML content
+        configuration = yaml.safe_load(file)
+
+    parameter1 = Params(p1, configuration, "test_experiment", "test_design")
+    parameter2 = Params(p2, configuration, "test_experiment", "test_design")
+
+    child = parameter1.breed(parameter2, alpha=0.5, child_name="child_design")
+
+    print(child.write_json(".", "child_design", "test_design"))
+
+
+    # original = parameter1.params.copy()
+
+    # # mutate params
+    # parameter1.mutate(mutation_rate=0.5)
+
+    # for param in original:
+    #     if original[param] != parameter1.params[param]:
+    #         print(f"Parameter {param} changed from {original[param]} to {parameter1.params[param]}")
+
+    ############# END TEST MUTATION AND BREEDING #############
+
+    # sorted_idx = evolver.evaluate_population(designs, "test2")
+
 
     # evaluate_population(designs,)
 
     # filename = "design0"
     # initialise_design(filename)
-
-    # params = dict(
-    #     steps=21,
-    #     sampleRate=278.17144775390625,
-    #     ab=300,
-    #     ampSkew=0.0,
-    #     fb=2.0,
-    #     frx=1.0,
-    #     fry=1.9776785373687744,
-    #     px=-2.5132739543914795,
-    #     py=1.3015170097351074,
-    #     dx=0.10000000149011612,
-    #     dy=0.10000000149011612,
-    #     dt=9.088699007406831E-4,
-    #     radial=0,
-    #     no=1,
-    #     lac=2,
-    #     fo=0.48571428656578064,
-    #     mix=0.39642858505249023,
-    #     spaceD=0.014285683631896973,
-    #     spaceP=1.0334409475326538,
-    #     algorithm="SINE"
-    # )
 
 
     # config = read_param_spec("param_spec.yaml")

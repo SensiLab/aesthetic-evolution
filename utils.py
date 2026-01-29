@@ -80,7 +80,8 @@ def plot_image_grid(filenames: list,
                     nrows: int,
                     ncols: int,
                     filepath=str,
-                    ranks=None):
+                    ranks=None,
+                    image_name="Rankings"):
     """
     Function plots a grid of images with an option to display ranks.
     @author: Stephen Krol
@@ -109,4 +110,4 @@ def plot_image_grid(filenames: list,
                 ax[i, j].set_title(filenames[idx].split('_')[-1].strip('.png'))
             ax[i, j].axis('off')
     plt.tight_layout()
-    plt.savefig("Rankings.png")
+    plt.savefig(f"{image_name}.png")
