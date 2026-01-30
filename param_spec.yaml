@@ -35,7 +35,7 @@ fry:
   max: 4
   calc: false
 px:
-  type: flaot
+  type: float
   min: -6.283185307179586
   max: 6.283185307179586
   calc: false
