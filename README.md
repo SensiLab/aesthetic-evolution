@@ -133,14 +133,9 @@ This project requires **CUDA 12.8**. The dependencies include:
 - Processes all-pairs pairwise comparisons to generate tournament rankings
 - Expects LLM to output only "1" or "2" for each comparison
 
-### Generation Workflow in `main()`
+### Generation Workflow in `run.py`
 
-The `main()` function orchestrates the complete evolutionary pipeline:
-
-```python
-def main(experiment_name, runs, param_spec_filepath, sketch_dir, prompt, 
-         population_size=20, processing="serial", screen=False, workers=8):
-```
+The `run.py` script orchestrates the complete evolutionary pipeline. It loads configuration from `experiment_config.yaml` and calls the `aesthetic_evolution()` function from `generate_designs.py`.
 
 **Workflow Steps**:
 
@@ -161,19 +156,18 @@ def main(experiment_name, runs, param_spec_filepath, sketch_dir, prompt,
 4. **Evolutionary Loop** (for each generation 1 to `runs`):
    ```python
    for run in range(1, runs):
-       generator.generate_population(pop_name, params) # Step A: Generate
-       evolver.evaluate_population(plot=True) # Step B: Evaluate
-       evolver.evolve_population()  # Step C: Evolve
+       evolver.evaluate_population(plot=True)     # Step A: Evaluate
+       evolver.evolve_population(generator, True)  # Step B: Evolve & Generate
    ```
 
-   **Step B - Evaluation**:
+   **Step A - Evaluation**:
    - Build all-pairs pairwise comparison jobs (N×(N-1)/2 comparisons for population size N)
    - Process comparisons in GPU batches using Qwen3-VL
    - Aggregate pairwise wins into tournament rankings
    - Sort population by rank (best to worst)
    - Plot ranked image grid
 
-   **Step C - Evolution**:
+   **Step B - Evolution**:
    - Sample parent pairs using rank-based probability (higher rank → higher selection chance)
    - Breed offspring via arithmetic mean crossover (α=0.5)
    - Apply mutation to offspring parameters
@@ -185,59 +179,68 @@ def main(experiment_name, runs, param_spec_filepath, sketch_dir, prompt,
 
 ### Configuration
 
-Key parameters in the example `main` block:
+All experiment parameters are configured in [experiment_config.yaml](experiment_config.yaml):
 
-```python
-experiment_name = "initial_test_1"           # Experiment identifier
-param_spec_filepath = "param_spec.yaml"      # Parameter schema
-sketch_dir = "/path/to/Harmonograph"         # Processing sketch directory
-population_size = 20                          # Population size (must be even)
-processing = "parallel"                       # "serial" or "parallel"
-screen = False                                # Use xvfb for headless rendering
-workers = 8                                   # Parallel workers
-runs = 5                                      # Number of generations
+```yaml
+experiment_name: "experiment"                  # Experiment identifier
+param_spec_file: "param_spec.yaml"             # Parameter schema
+sketch_dir: "/path/to/Harmonograph"            # Processing sketch directory
+population_size: 20                             # Population size (must be even)
+processing: "parallel"                          # "serial" or "parallel"
+screen: False                                   # Use xvfb for headless rendering
+workers: 8                                      # Parallel workers
+runs: 5                                         # Number of generations
+prompt: "..."                                   # LLM evaluation prompt (see below)
 ```
 
 **LLM Prompt Example**:
-```python
-prompt = """
-You will be given two images.
+```yaml
+prompt: "You will be given two images.
 
-IMPORTANT RULES (must be followed):
-- Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
-- Visible line structure and repeating patterns are REQUIRED for a high score.
-- Messy noise or amorphous shapes should be ranked lower.
+        IMPORTANT RULES (must be followed):
+        - Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
+        - Visible line structure and repeating patterns are REQUIRED for a high score.
+        - Messy noise or amorphous shapes should be ranked lower.
 
-Task:
-Choose which image is more aesthetically pleasing according to the rules above.
-Output ONLY "1" or "2".
-"""
+        Task:
+        Choose which image is more aesthetically pleasing according to the rules above.
+        Output ONLY '1' or '2'."
 ```
 
 ## Usage
 
 ### Running an Experiment
 
-1. **Configure parameters** in the `__main__` block of [generate_designs.py](generate_designs.py):
-   - Set your `sketch_dir` path
+1. **Configure parameters** in [experiment_config.yaml](experiment_config.yaml):
+   - Set your `sketch_dir` path to your Processing sketch
    - Customize the LLM `prompt` for desired aesthetic criteria
-   - Adjust population size and generation count
+   - Adjust `population_size` and `runs` (number of generations)
+   - Set `experiment_name` (script will prompt if experiment already exists)
 
 2. **Execute**:
    ```bash
-   python generate_designs.py
+   python run.py
    ```
+   
+   The script will:
+   - Load configuration from `experiment_config.yaml`
+   - Check if experiment already exists and prompt for overwrite
+   - Display loaded configuration
+   - Run the evolutionary process
+   - Save configuration to the experiment directory
 
 3. **Monitor output**:
    - Progress bars show design generation and evaluation
    - Ranked image grids saved to `Experiments/{name}/run{N}/Images/`
    - Parameter JSONs stored in `Experiments/{name}/run{N}/Params/`
+   - Configuration backup saved to `Experiments/{name}/experiment_config.yaml`
 
 ### Output Structure
 
 ```
 Experiments/
   {experiment_name}/
+    experiment_config.yaml   # Backup of configuration used
     run0/                    # Initial generation
       Images/
         run0_0.png
@@ -303,4 +306,15 @@ See [requirements.txt](requirements.txt) for complete list.
 
 ## License
 
-This work is currently distributed under the CC BY-NC-SA 4.0 license.
+This project is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](LICENSE.txt) (CC BY-NC-SA 4.0).
+
+You are free to:
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material
+
+Under the following terms:
+- **Attribution**: You must give appropriate credit
+- **NonCommercial**: You may not use the material for commercial purposes
+- **ShareAlike**: If you remix, transform, or build upon the material, you must distribute your contributions under the same license
+
+See [LICENSE.txt](LICENSE.txt) for the full license text.
