@@ -61,6 +61,8 @@ class Params:
         self.int_params = [param for param in self.params_config if self.params_config[param]["type"] == "int"]
         self.categorical_params = [param for param in self.params_config if self.params_config[param]["type"] == "categorical"]
 
+        self.score = None
+
     def breed(self, other: "Params", alpha: float, child_name: str) -> "Params":
 
         """
@@ -453,6 +455,8 @@ class DesignEvolver:
                  prompt: str,
                  n: int, 
                  k: int,
+                 alpha_mode: str,
+                 alpha: float = None,
                  plot_pop: bool = False) -> None:
         """
         Constructor for DesignEvolver class.
@@ -470,6 +474,10 @@ class DesignEvolver:
         :type n: int
         :param k: Tournament size for selection.
         :type k: int
+        :param alpha_mode: Method for selecting alpha during crossover ("random", "fixed", "biased").
+        :type alpha_mode: str
+        :param alpha: Fixed alpha value if alpha_mode is "fixed" between 0 and 1.
+        :type alpha: float
         :param plot_pop: Whether to plot the population images.
         :type plot_pop: bool
 
@@ -488,6 +496,15 @@ class DesignEvolver:
 
         # set population size
         self.population_size = n
+
+        # set alpha mode
+        self.alpha_mode = alpha_mode
+        if alpha_mode == "fixed":
+            assert alpha is not None, "Alpha value must be provided for fixed alpha mode."
+            assert 0 <= alpha <= 1, "Alpha must be between 0 and 1."
+
+        self.alpha = alpha
+
 
         # assign prompt
         self.prompt = prompt
@@ -538,8 +555,13 @@ class DesignEvolver:
         # calculate ranks
         ranks = calc_ranks(results, len(filenames))
         sorted_idx = np.argsort(ranks)[::-1]
+        sorted_ranks = ranks[sorted_idx]
 
         self.population_params = [self.population_params[i] for i in sorted_idx]
+
+        # set parameter scores
+        for i in range(len(sorted_ranks)):
+            self.population_params[i].score = sorted_ranks[i]
 
         # plot images
         if plot:
@@ -575,7 +597,16 @@ class DesignEvolver:
         # perform crossover to create new population
         children = []
         for i, (parent1, parent2) in enumerate(sampled_couples):
-            alpha = random.uniform(0, 1) # TODO: try other methods for alpha selection: constant, biased towards higher ranked parent, etc.
+
+            if self.alpha_mode == "fixed":
+                alpha = self.alpha
+            elif self.alpha_mode == "random":
+                alpha = random.uniform(0, 1) 
+            elif self.alpha_mode == "biased":
+                alpha = self._calculate_alpha(parent1.score, parent2.score)
+            else:
+                raise ValueError(f"Unknown alpha mode: {self.alpha_mode}")
+
             child_params = parent1.breed(other=parent2, alpha=alpha, child_name=f"run{self.current_population}_{i}")
             children.append(child_params)
          
@@ -694,11 +725,37 @@ class DesignEvolver:
         
         return param_list
     
+    def _calculate_alpha(self, score1: float, score2: float) -> float:
+        """
+        Method calculates alpha value for biased crossover based on parent scores.
+        @author: Stephen Krol
+        @date: Jan 2026
+
+        :param self: Current instance of the class.
+        :param score1: Score of parent 1.
+        :type score1: float
+        :param score2: Score of parent 2.
+        :type score2: float
+
+        :return: Calculated alpha value between 0 and 1.
+        :rtype: float
+        """
+        
+        total = score1 + score2
+
+        # handle edge case  
+        if total == 0:
+            return 0.5
+        
+        return score1 / total
+    
 def aesthetic_evolution(experiment_name: str,
                         runs :int,
                         param_spec_filepath: str,
                         sketch_dir: str,
                         prompt: str,
+                        alpha_mode: str = "random",
+                        alpha: float = 0.5,
                         population_size: int = 20,
                         processing: str = "serial",
                         screen: bool = False,
@@ -718,6 +775,10 @@ def aesthetic_evolution(experiment_name: str,
     :type sketch_dir: str
     :param prompt: Prompt for LLM to use in ranking designs.
     :type prompt: str
+    :param alpha_mode: Method for selecting alpha during crossover ("random", "fixed", "biased").
+    :type alpha_mode: str
+    :param alpha: Fixed alpha value if alpha_mode is "fixed".
+    :type alpha: float
     :param population_size: Number of individuals in the population.
     :type population_size: int
     :param processing: Processing mode, either "serial" or "parallel".
@@ -747,6 +808,8 @@ def aesthetic_evolution(experiment_name: str,
         prompt=prompt,
         n=population_size,
         k=5,
+        alpha_mode=alpha_mode,
+        alpha=alpha,
         plot_pop=True
     )
 

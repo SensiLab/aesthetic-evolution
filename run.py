@@ -36,6 +36,15 @@ with open(prompt_file, 'r') as file:
 
 
 #### LOAD EVOLUTION CONFIGURATION #####
+evo_config = configuration.get('evo', None)
+assert evo_config is not None, "Evolution configuration not detected, validate format for experiment_config.yaml."
+
+# validate alpha values if present
+assert evo_config["alpha_mode"] in ["random", "fixed", "biased"], "Alpha mode must be one of 'random', 'fixed', or 'biased'."
+if evo_config["alpha_mode"] == "fixed":
+    alpha = evo_config.get("alpha", None)
+    assert alpha is not None, "Alpha value must be provided for fixed alpha mode."
+    assert 0 <= alpha <= 1, "Alpha must be between 0 and 1."
 
 
 ##### START EXPERIMENT #####
@@ -47,11 +56,11 @@ for key, value in job_config.items():
 # run aesthetic evolution with loaded configuration
 aesthetic_evolution(
     experiment_name=job_config['experiment_name'],
-    runs=job_config['runs'],
+    runs=evo_config['runs'],
     param_spec_filepath=job_config['param_spec_file'],
     sketch_dir=job_config['sketch_dir'],
     prompt=prompt,
-    population_size=job_config.get('population_size', 20),
+    population_size=evo_config.get('population_size', 20),
     processing=job_config.get('processing', 'serial'),
     screen=job_config.get('screen', False),
     workers=job_config.get('workers', 8)

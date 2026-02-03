@@ -1,15 +1,18 @@
 
 job:
-  experiment_name: "auto-run-2"
+  experiment_name: "alpha-biased-test-1"
   param_spec_file: "param_spec.yaml"
   sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
   prompt_filepath: "prompt.txt"
-  population_size: 20
   processing: parallel
   screen: False
   workers: 8
-  runs: 5
 
+evo:
+  alpha_mode: "biased" # fixed | random | biased
+  alpha: 0.5 
+  runs: 5
+  population_size: 20
 
 
 
