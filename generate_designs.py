@@ -575,7 +575,7 @@ class DesignEvolver:
         # perform crossover to create new population
         children = []
         for i, (parent1, parent2) in enumerate(sampled_couples):
-            alpha = random.uniform(0, 1) # TODO: might be a better method
+            alpha = random.uniform(0, 1) # TODO: try other methods for alpha selection: constant, biased towards higher ranked parent, etc.
             child_params = parent1.breed(other=parent2, alpha=alpha, child_name=f"run{self.current_population}_{i}")
             children.append(child_params)
          

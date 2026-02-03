@@ -1,22 +1,17 @@
 
-experiment_name: "experiment"
-param_spec_file: "param_spec.yaml"
-sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
-prompt: "You will be given two images.
+job:
+  experiment_name: "auto-run-2"
+  param_spec_file: "param_spec.yaml"
+  sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
+  prompt_filepath: "prompt.txt"
+  population_size: 20
+  processing: parallel
+  screen: False
+  workers: 8
+  runs: 5
 
-        IMPORTANT RULES (must be followed):
-        - Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
-        - Visible line structure and repeating patterns are REQUIRED for a high score.
-        - Messy noise or amorphous shapes should be ranked lower.
 
-        Task:
-        Choose which image is more aesthetically pleasing according to the rules above.
-        Output ONLY '1' or '2'."
-population_size: 20
-processing: parallel
-screen: False
-workers: 8
-runs: 5
+
 
         
  
