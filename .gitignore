@@ -8,3 +8,4 @@ Designs/
 Experiments/*
 *.json
 probability_simulation.py
+.github/
