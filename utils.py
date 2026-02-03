@@ -112,3 +112,52 @@ def plot_image_grid(filenames: list,
             ax[i, j].axis('off')
     plt.tight_layout()
     plt.savefig(f"{save_path}/{image_name}.png")
+
+
+def prob(k: int, N: int) -> np.ndarray:
+    """
+    Function to calculate the probablity of the r-th item being the highest ranked
+    among k samples drawn with replacement from N unique items.
+    @author: Stephen Krol
+    @Date: Jan 2026
+    
+    :param k: Number of samples drawn with replacement.
+    :type k: int
+    :param N: Population size
+    :type N: int
+
+    :return: Array of probabilities for each item being the highest ranked.
+    :rtype: np.ndarray
+    """
+
+    r = np.arange(1, N+1)
+
+    return (1 - (r - 1) / N) ** k - (1 - r / N) ** k # Probability of r-th unique item being the k-th unique item observed
+
+
+def simulated(k: int, N: int) -> np.ndarray:
+    """
+    Simulation of tournament selection probabilities to validate prob function.
+    @author: Stephen Krol
+    @Date: Jan 2026
+    
+    :param k: Number of samples drawn with replacement.
+    :type k: int
+    :param N: Population size
+    :type N: int
+
+    :return: Array of simulated probabilities for each item being the highest ranked.
+    :rtype: np.ndarray
+    """
+
+    steps = 1000000
+
+    counts = np.zeros(N)
+    values = np.arange(1, N+1)
+
+    for _ in range(steps):
+
+        observed = np.min(np.random.choice(values, size=k, replace=True))
+        counts[observed - 1] += 1
+
+    return counts / steps
