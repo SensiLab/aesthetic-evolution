@@ -694,15 +694,15 @@ class DesignEvolver:
         
         return param_list
     
-def main(experiment_name: str,
-         runs :int,
-         param_spec_filepath: str,
-         sketch_dir: str,
-         prompt: str,
-         population_size: int = 20,
-         processing: str = "serial",
-         screen: bool = False,
-         workers: int = 8) -> None:
+def aesthetic_evolution(experiment_name: str,
+                        runs :int,
+                        param_spec_filepath: str,
+                        sketch_dir: str,
+                        prompt: str,
+                        population_size: int = 20,
+                        processing: str = "serial",
+                        screen: bool = False,
+                        workers: int = 8) -> None:
     """
     Main function for generating and evolving design populations.
     @author: Stephen Krol
@@ -763,40 +763,4 @@ def main(experiment_name: str,
 
         # evolve population
         evolver.evolve_population()
-
-
-
-if __name__ == "__main__":
-
-    experiment_name = "initial_test_1"
-    param_spec_filepath = "param_spec.yaml"
-    sketch_dir = "/home/sjkro1/ARC-Discovery/Harmonograph"
-    prompt = """
-            You will be given two images.
-
-            IMPORTANT RULES (must be followed):
-            - Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
-            - Visible line structure and repeating patterns are REQUIRED for a high score.
-            - Messy noise or amorphous shapes should be ranked lower.
-
-            Task:
-            Choose which image is more aesthetically pleasing according to the rules above.
-            Output ONLY "1" or "2".
-        """
-    population_size = 20
-    processing = "parallel"
-    screen = False
-    workers = 8
-    runs = 5
-
-    main(
-        experiment_name=experiment_name,
-        runs=runs,
-        param_spec_filepath=param_spec_filepath,
-        sketch_dir=sketch_dir,
-        prompt=prompt,
-        population_size=population_size,
-        processing=processing,
-        screen=screen,
-        workers=workers
-    )
+    
