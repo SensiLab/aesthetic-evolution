@@ -12,7 +12,6 @@ import torch
 import yaml
 
 from utils import build_messages, calc_ranks, plot_image_grid
-from dataclasses import dataclass
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from process_batch import Qwen3VLBatchProcessor
 from typing import List, Tuple
@@ -20,12 +19,34 @@ from tqdm import tqdm
 
 
 class Params:
+    """
+    Class to store and manage genotype parameters, handle parameter breeding and mutation,
+    and writing params to file.
+    @author: Stephen Krol
+    @date: Jan 2026
+    """
 
     def __init__(self, 
                  parameters: dict, 
                  params_config: dict,
                  experiment_name: str, 
                  name: str) -> None:
+        """
+        Constructor for Params class.
+        
+        :param self: Current instance of the class.
+        :param parameters: Dictionary of parameters and values.
+        :type parameters: dict
+        :param params_config: Config file for parameters describing types and ranges.
+        :type params_config: dict
+        :param experiment_name: Name of the experiment the parameters belong to.
+        :type experiment_name: str
+        :param name: Name of the parameter instance.
+        :type name: str
+
+        :return: None
+        :rtype: None
+        """
 
         # check filepath exists
         self.params = parameters
@@ -40,8 +61,26 @@ class Params:
         self.int_params = [param for param in self.params_config if self.params_config[param]["type"] == "int"]
         self.categorical_params = [param for param in self.params_config if self.params_config[param]["type"] == "categorical"]
 
-    # TODO: could be a static method
-    def breed(self, other: "Params", alpha: float, child_name: str) -> dict:
+    def breed(self, other: "Params", alpha: float, child_name: str) -> "Params":
+
+        """
+        Breed method to create a child Params instance from two parent Params instances.
+        Uses arithmetic mean crossover for float and int parameters, and random selection
+        for categorical parameters.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param other: Other Params instance to breed with.
+        :type other: "Params"
+        :param alpha: Weighting factor for arithmetic mean crossover.
+        :type alpha: float
+        :param child_name: Name of the child Params instance.
+        :type child_name: str
+
+        :return: Child Params instance.
+        :rtype: "Params"
+        """
 
         assert 0 <= alpha <= 1, "Alpha must be between 0 and 1"
 
@@ -70,6 +109,20 @@ class Params:
         return child
 
     def mutate(self, mutation_rate: float) -> None:
+        """
+        Mutate method to apply random mutations to the parameters.
+        Uses Gaussian mutation for float and int parameters, and random selection
+        for categorical parameters.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param mutation_rate: Mutation rate for applying random mutations.
+        :type mutation_rate: float
+
+        :return: None
+        :rtype: None
+        """
 
         # float and int mutation
         for param in (self.float_params + self.int_params):
@@ -111,8 +164,6 @@ class Params:
         @date: Jan 2026
         
         :param self: Current instance of the class.
-        :param params: parameters in dictionary format
-        :type params: dict
         :param filepath: Path to the directory where the JSON file will be saved
         :type filepath: str
         :param filename: Name of the JSON file to be created
@@ -136,14 +187,44 @@ class Params:
     def print_params(self) -> None:
         """
         Method prints the parameters to the console.
+        @author: Stephen Krol
+        @date: Jan 2026
+
+        :param self: Current instance of the class.
+
+        :return: None
+        :rtype: None
         """
+
         for key, value in self.params.items():
             print(f"{key}: {value}")
 
     def _calculate_dt(self, params) -> float:
+        """
+        Method calculates the dt parameter based on other parameters, fb, frx, fry, and sampleRate.
+        @author: Stephen Krol
+        @date: Jan 2026
+                
+        :param self: Current instance of the class.
+        :param params: Dictionary of parameters.
+
+        :return: Calculated dt value.
+        :rtype: float
+        """
         return 1.0 / (params["fb"] * max(params["frx"], params["fry"] * params["sampleRate"]))
     
     def _calculate_spaceP(self, params) -> float:
+        """
+        Method calculates the spaceP parameter based on spaceD.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param params: Dictionary of parameters.
+
+        :return: Calculated spaceP value.
+        :rtype: float
+        """
         return 10**params["spaceD"]
 
 class DesignGenerator:
@@ -357,6 +438,14 @@ class DesignGenerator:
 
             
 class DesignEvolver:
+    """
+    Class to manage the evolution of design populations using tournament selection.
+    This class handles population evaluation, ranking, selection, crossover, and mutation.
+    It generates new parameter sets for each generation based on LLM rankings, but does not
+    generate phenotypes itself.
+    @author: Stephen Krol
+    @date: Jan 2026
+    """
 
     def __init__(self, 
                  spec_filepath: str,
@@ -365,6 +454,28 @@ class DesignEvolver:
                  n: int, 
                  k: int,
                  plot_pop: bool = False) -> None:
+        """
+        Constructor for DesignEvolver class.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param spec_filepath: Filepath of the parameter specification YAML file.
+        :type spec_filepath: str
+        :param experiment_name: Name of the experiment.
+        :type experiment_name: str
+        :param prompt: Prompt for LLM to use in ranking designs.
+        :type prompt: str
+        :param n: Population size.
+        :type n: int
+        :param k: Tournament size for selection.
+        :type k: int
+        :param plot_pop: Whether to plot the population images.
+        :type plot_pop: bool
+
+        :return: None
+        :rtype: None
+        """
                  
         # verify design path exists and assign
         self.experiment_name = experiment_name
@@ -432,10 +543,25 @@ class DesignEvolver:
 
         # plot images
         if plot:
-            plot_image_grid(filenames[sorted_idx], nrows=5, ncols=4, filepath=population_image_fileapath, ranks=ranks[sorted_idx], save_path=population_image_fileapath, image_name=f'Population {self.current_population} Rankings')
+            plot_image_grid(filenames[sorted_idx], 
+                            nrows=5, ncols=4, 
+                            filepath=population_image_fileapath, 
+                            ranks=ranks[sorted_idx], 
+                            save_path=population_image_fileapath, 
+                            image_name=f'Population {self.current_population} Rankings')
 
     
-    def evolve_population(self):
+    def evolve_population(self) -> None:
+        """
+        Method evolves the population using tournament selection, crossover, and mutation.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+
+        :return: None
+        :rtype: None
+        """
 
         # update current population count
         self.current_population += 1
@@ -461,13 +587,42 @@ class DesignEvolver:
         self.population_params = children
 
 
-    def _plot_population(self):
+    # TODO: handle different population sizes
+    def _plot_population(self) -> None:
+        """
+        Method plots the current population images in a grid.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+
+        :return: None
+        :rtype: None
+        """
 
         filenames = np.array([f"{param.name}.png" for param in self.population_params])
         population_image_fileapath = f"{self.design_path}/run{self.current_population}/Images"
-        plot_image_grid(filenames, nrows=5, ncols=4, filepath=population_image_fileapath, save_path=population_image_fileapath, image_name=f'Population {self.current_population} Designs')
+        plot_image_grid(filenames, 
+                        nrows=5, ncols=4, 
+                        filepath=population_image_fileapath, 
+                        save_path=population_image_fileapath, 
+                        image_name=f'Population {self.current_population} Designs')
 
     def _calc_ranking_probabilities(self, N: int, k: int) -> np.ndarray:
+        """
+        Method calculates ranking probabilities for tournament selection.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param self: Current instance of the class.
+        :param N: Total number of items.
+        :type N: int
+        :param k: Number of items selected in each tournament.
+        :type k: int
+
+        :return: Ranking probabilities as a numpy array.
+        :rtype: np.ndarray
+        """
 
         r = np.arange(1, N+1)
 
@@ -547,7 +702,34 @@ def main(experiment_name: str,
          population_size: int = 20,
          processing: str = "serial",
          screen: bool = False,
-         workers: int = 8):
+         workers: int = 8) -> None:
+    """
+    Main function for generating and evolving design populations.
+    @author: Stephen Krol
+    @date: Jan 2026
+    
+    :param experiment_name: Name of the experiment.
+    :type experiment_name: str
+    :param runs: Number of runs to execute.
+    :type runs: int
+    :param param_spec_filepath: Filepath to the parameter specification YAML file.
+    :type param_spec_filepath: str
+    :param sketch_dir: Directory containing the processing sketch files.
+    :type sketch_dir: str
+    :param prompt: Prompt for LLM to use in ranking designs.
+    :type prompt: str
+    :param population_size: Number of individuals in the population.
+    :type population_size: int
+    :param processing: Processing mode, either "serial" or "parallel".
+    :type processing: str
+    :param screen: Whether to display the screen during processing.
+    :type screen: bool
+    :param workers: Number of worker threads or processes to use.
+    :type workers: int
+
+    :return: None
+    :rtype: None
+    """
 
     # initialise design generator
     generator = DesignGenerator(
@@ -590,15 +772,22 @@ if __name__ == "__main__":
     param_spec_filepath = "param_spec.yaml"
     sketch_dir = "/home/sjkro1/ARC-Discovery/Harmonograph"
     prompt = """
-        You will be given two images and you need to output either '1' or '2' based on which image is more aesthetically pleasing.
-        Designs with noticable patterns should be rated higher than those which are messy or noisy. Also penalise images that are
-        just dark shapes. Focus on ranking patterns that have complex structures that are visible as higher.
+            You will be given two images.
+
+            IMPORTANT RULES (must be followed):
+            - Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
+            - Visible line structure and repeating patterns are REQUIRED for a high score.
+            - Messy noise or amorphous shapes should be ranked lower.
+
+            Task:
+            Choose which image is more aesthetically pleasing according to the rules above.
+            Output ONLY "1" or "2".
         """
     population_size = 20
     processing = "parallel"
     screen = False
     workers = 8
-    runs = 100
+    runs = 5
 
     main(
         experiment_name=experiment_name,
@@ -611,129 +800,3 @@ if __name__ == "__main__":
         screen=screen,
         workers=workers
     )
-
-    # # Example usage
-    # generator = DesignGenerator(
-    #     experiment_name="test_experiment",
-    #     spec_filepath="param_spec.yaml",
-    #     sketch_dir="/home/sjkro1/ARC-Discovery/Harmonograph",
-    #     processing="parallel",
-    #     screen=False,
-    #     workers=8
-    # )
-
-    # designs, params_json = generator.generate_population(n=20, pop_name="run0", inital_populaion=True)
-
-    ############# START Evolver Example Usage #############
-
-    # designs = np.array(os.listdir("Experiments/test_experiment/run0/Images"))
-    # params = [f"{design.strip('.png')}.json" for design in designs]
-
-    # evolver = DesignEvolver(
-    #     design_path="/home/sjkro1/ARC-Discovery/aesthetic-evolution/Experiments/test_experiment",
-    #     prompt="""
-    #     You will be given two images and you need to output either '1' or '2' based on which image is more aesthetically pleasing.
-    #     Designs with interesting patterns should be rated higher. Penalise designs that are too noisy and messy or dark blops. Focus on ranking patterns
-    #     that have complex structures that are visible as higher.
-    #     """,
-    #     initial_pop_param_list=params,
-    #     k=5
-    # )
-
-    # evolver.evaluate_population(designs, "run0", plot=True)
-
-    # selected = evolver.evolve_population()
-    # filenames = [design.name + ".png" for design in selected]
-    # plot_image_grid(filenames, nrows=5, ncols=4, filepath="/home/sjkro1/ARC-Discovery/aesthetic-evolution/Experiments/test_experiment/run0/Images", image_name='Selected Designs')
-
-
-    ############# END Evolver Example Usage #############
-
-
-    ############# TEST MUTATION AND BREEDING #############
-
-    # p1 = {
-    #     "steps": 47,
-    #     "sampleRate": 286.8727917356732,
-    #     "ab": 167,
-    #     "as": 0.6994946486325484,
-    #     "fb": 17,
-    #     "frx": 1.7260021760064077,
-    #     "fry": 2.795336520899456,
-    #     "px": 2.231274673480362,
-    #     "py": -5.086525350173667,
-    #     "dx": 0.2410312493937298,
-    #     "dy": 0.006891169323498286,
-    #     "lac": 3.305891216047324,
-    #     "fo": 1.5091465083145679,
-    #     "mix": 0.6364773573733347,
-    #     "spaceD": -0.25884961893939207,
-    #     "no": 2,
-    #     "algorithm": "POW",
-    #     "radial": 0,
-    #     "dt": 7.335464509380872e-05,
-    #     "spaceP": 0.5509984549608025
-    # }
-
-    # p2 = {
-    #     "steps": 96,
-    #     "sampleRate": 191.902874002995,
-    #     "ab": 152,
-    #     "as": 0.3989198683872677,
-    #     "fb": 10,
-    #     "frx": 3.682748974321429,
-    #     "fry": 3.7008720162228705,
-    #     "px": 1.2206917814245841,
-    #     "py": 5.3443282627665525,
-    #     "dx": 0.1805668344718995,
-    #     "dy": 0.22006003144015002,
-    #     "lac": 9.120395325539539,
-    #     "fo": 1.880744852023576,
-    #     "mix": 0.5776249438474294,
-    #     "spaceD": 0.22630952557407635,
-    #     "no": 3,
-    #     "algorithm": "NOISE",
-    #     "radial": 0,
-    #     "dt": 0.00014080382556497074,
-    #     "spaceP": 1.6838737454341606
-    # }
-
-
-    # with open("param_spec.yaml", 'r') as file:
-    #     # Use safe_load to safely parse the YAML content
-    #     configuration = yaml.safe_load(file)
-
-    # parameter1 = Params(p1, configuration, "test_experiment", "test_design")
-    # parameter2 = Params(p2, configuration, "test_experiment", "test_design")
-
-    # child = parameter1.breed(parameter2, alpha=0.5, child_name="child_design")
-
-    # print(child.write_json(".", "child_design", "test_design"))
-
-
-    # original = parameter1.params.copy()
-
-    # # mutate params
-    # parameter1.mutate(mutation_rate=0.5)
-
-    # for param in original:
-    #     if original[param] != parameter1.params[param]:
-    #         print(f"Parameter {param} changed from {original[param]} to {parameter1.params[param]}")
-
-    ############# END TEST MUTATION AND BREEDING #############
-
-    # sorted_idx = evolver.evaluate_population(designs, "test2")
-
-
-    # evaluate_population(designs,)
-
-    # filename = "design0"
-    # initialise_design(filename)
-
-
-    # config = read_param_spec("param_spec.yaml")
-
-    # params = generate_rand_params(config)
-
-    # write_json(params, f"Designs/Params/{filename}", filename)
-    # generate_image(filename)

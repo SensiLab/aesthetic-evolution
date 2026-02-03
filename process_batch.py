@@ -10,10 +10,11 @@ from PIL import Image
 from pathlib import Path
 from typing import List, Dict
 import time
+from tqdm import tqdm
 
 from utils import ComparisonJob
 
-
+# TODO: add argumment for printing/logging performance
 class Qwen3VLBatchProcessor:
     def __init__(self, model_name: str = "Qwen/Qwen3-VL-7B-Instruct", device: str = "cuda"):
         """
@@ -103,7 +104,7 @@ class Qwen3VLBatchProcessor:
             # all_video_inputs.extend(video_inputs if video_inputs else [])
             
             # Batch process all inputs together
-            print("Preparing batch inputs...")
+            # print("Preparing batch inputs...")
             inputs = self.processor(
                 text=texts,
                 images=all_image_inputs if all_image_inputs else None,
@@ -112,33 +113,33 @@ class Qwen3VLBatchProcessor:
                 return_tensors="pt"
             )
             inputs = inputs.to(self.device)
-            print(inputs["input_ids"].shape)
+            # print(inputs["input_ids"].shape)
 
             # Validation checks
-            if validate:
-                print(f"\n{'='*60}")
-                print("VALIDATION CHECKS:")
-                print(f"{'='*60}")
-                print(f"Number of jobs: {len(jobs)}")
-                print(f"Number of text prompts: {len(texts)}")
-                # print(f"Number of images loaded: {len(all_images)}")
-                print(f"Expected images (2 per job): {len(jobs) * 2}")
-                print(f"Batch size in inputs: {inputs.input_ids.shape[0]}")
+            # if validate:
+            #     print(f"\n{'='*60}")
+            #     print("VALIDATION CHECKS:")
+            #     print(f"{'='*60}")
+            #     print(f"Number of jobs: {len(jobs)}")
+            #     print(f"Number of text prompts: {len(texts)}")
+            #     # print(f"Number of images loaded: {len(all_images)}")
+            #     print(f"Expected images (2 per job): {len(jobs) * 2}")
+            #     print(f"Batch size in inputs: {inputs.input_ids.shape[0]}")
                 
-                # Verify batch size matches number of jobs
-                assert inputs.input_ids.shape[0] == len(jobs), \
-                    f"Batch size mismatch! Expected {len(jobs)}, got {inputs.input_ids.shape[0]}"
+            #     # Verify batch size matches number of jobs
+            #     assert inputs.input_ids.shape[0] == len(jobs), \
+            #         f"Batch size mismatch! Expected {len(jobs)}, got {inputs.input_ids.shape[0]}"
                 
-                # Verify we have the right number of images
-                # assert len(all_images) == len(jobs) * 2, \
-                #     f"Image count mismatch! Expected {len(jobs) * 2}, got {len(all_images)}"
+            #     # Verify we have the right number of images
+            #     # assert len(all_images) == len(jobs) * 2, \
+            #     #     f"Image count mismatch! Expected {len(jobs) * 2}, got {len(all_images)}"
                 
-                print("✓ All validation checks passed!")
-                print(f"{'='*60}\n")
+            #     print("✓ All validation checks passed!")
+            #     print(f"{'='*60}\n")
 
             torch.cuda.synchronize()
             start = time.perf_counter()
-            print(f"Generating responses for {len(jobs)} jobs in parallel...")
+            # print(f"Generating responses for {len(jobs)} jobs in parallel...")
             # Generate all responses in parallel on GPU
             with torch.no_grad():
                 generated_ids = self.model.generate(
@@ -148,12 +149,12 @@ class Qwen3VLBatchProcessor:
                 )
             
             end = time.perf_counter()
-            print(f"Generation completed in {end - start:.2f}s")
-            print(f"Time per job: {(end - start)/len(jobs):.2f}s")
-            print(f"Max GPU memory allocated: {torch.cuda.max_memory_allocated() / 1024**2:.2f} MB")    
+            # print(f"Generation completed in {end - start:.2f}s")
+            # print(f"Time per job: {(end - start)/len(jobs):.2f}s")
+            # print(f"Max GPU memory allocated: {torch.cuda.max_memory_allocated() / 1024**2:.2f} MB")    
             
             # Decode all outputs
-            print("Decoding outputs...")
+            # print("Decoding outputs...")
             generated_ids_trimmed = [
                 out_ids[len(in_ids):] 
                 for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
@@ -175,10 +176,10 @@ class Qwen3VLBatchProcessor:
                     "image1": job.image1_path,
                     "image2": job.image2_path
                 })
-                print(f"✓ Completed job {job.job_id}")
+                # print(f"✓ Completed job {job.job_id}")
             
-            print(f"\nTotal processing time: {total_time:.2f}s")
-            print(f"Average time per job: {total_time/len(jobs):.2f}s")
+            # print(f"\nTotal processing time: {total_time:.2f}s")
+            # print(f"Average time per job: {total_time/len(jobs):.2f}s")
             
             return results
             
@@ -214,14 +215,14 @@ class Qwen3VLBatchProcessor:
         
         print(f"Processing {total_jobs} jobs in chunks of {chunk_size}...")
         
-        for i in range(0, total_jobs, chunk_size):
+        for i in tqdm(range(0, total_jobs, chunk_size)):
             chunk = jobs[i:i + chunk_size]
             chunk_num = i // chunk_size + 1
             total_chunks = (total_jobs + chunk_size - 1) // chunk_size
             
-            print(f"\n{'='*60}")
-            print(f"Processing chunk {chunk_num}/{total_chunks} ({len(chunk)} jobs)")
-            print(f"{'='*60}")
+            # print(f"\n{'='*60}")
+            # print(f"Processing chunk {chunk_num}/{total_chunks} ({len(chunk)} jobs)")
+            # print(f"{'='*60}")
             
             chunk_results = self.process_batch_parallel(chunk)
             all_results.extend(chunk_results)
