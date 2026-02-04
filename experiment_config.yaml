@@ -15,7 +15,7 @@ evo:
   population_size: 20
   mutation_rate: 0.1 # chance of single attribute mutating
   mutation_sigma: 0.1 # sd of guassian noise added to continuous variables
-  k: 0.1 # percentage of designs to be selected for tournament selection
+  k: 0.25 # percentage of designs to be selected for tournament selection
   
 
 
