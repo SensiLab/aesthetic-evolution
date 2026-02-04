@@ -13,6 +13,9 @@ evo:
   alpha: 0.5 
   runs: 5
   population_size: 20
+  mutation_rate: 0.1 # chance of single attribute mutating
+  mutation_sigma: 0.1 # sd of guassian noise added to continuous variables
+  
 
 
 

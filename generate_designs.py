@@ -30,7 +30,8 @@ class Params:
                  parameters: dict, 
                  params_config: dict,
                  experiment_name: str, 
-                 name: str) -> None:
+                 name: str,
+                 mutation_sigma: float = 0.1) -> None:
         """
         Constructor for Params class.
         
@@ -43,6 +44,8 @@ class Params:
         :type experiment_name: str
         :param name: Name of the parameter instance.
         :type name: str
+        :param mutation_sigma: Standard deviation for Gaussian mutation.
+        :type mutation_sigma: float
 
         :return: None
         :rtype: None
@@ -62,6 +65,7 @@ class Params:
         self.categorical_params = [param for param in self.params_config if self.params_config[param]["type"] == "categorical"]
 
         self.score = None
+        self.mutation_sigma = mutation_sigma
 
     def breed(self, other: "Params", alpha: float, child_name: str) -> "Params":
 
@@ -88,7 +92,7 @@ class Params:
 
         # TODO: arthimitic mean currently does not consider ranking between parents,
         # making it harder to weight higher ranked parents more heavily.
-        child = Params({}, self.params_config, self.experiment_name, child_name)
+        child = Params({}, self.params_config, self.experiment_name, child_name, self.mutation_sigma)
 
         # calculate arthimitic mean of float parameters
         for param in self.float_params:
@@ -137,7 +141,7 @@ class Params:
                 # gaussian mutation
                 a, b = self.params_config[param]["min"], self.params_config[param]["max"]
                 z = (self.params[param] - a) / (b - a)
-                z += random.gauss(0, 0.1)
+                z += random.gauss(0, self.mutation_sigma)
                 z = min(max(z, 0), 1)
                 x = a + z * (b - a)
 
@@ -457,6 +461,8 @@ class DesignEvolver:
                  k: int,
                  alpha_mode: str,
                  alpha: float = None,
+                 mutation_rate: float = 0.1,
+                 mutation_sigma: float = 0.1,
                  plot_pop: bool = False) -> None:
         """
         Constructor for DesignEvolver class.
@@ -517,6 +523,9 @@ class DesignEvolver:
 
         # set plot population boolean
         self.plot_pop = plot_pop
+
+        self.mutation_rate = mutation_rate
+        self.mutation_sigma = mutation_sigma
 
         # set initial population parameters
         self.population_params = self._generate_initial_params()
@@ -611,9 +620,8 @@ class DesignEvolver:
             children.append(child_params)
          
         # mutate children
-        mutation_rate = 0.1 # TODO: make this a parameter
         for child in children:
-            child.mutate(mutation_rate)
+            child.mutate(self.mutation_rate)
         
         self.population_params = children
 
@@ -721,7 +729,7 @@ class DesignEvolver:
             params["spaceP"] = 10**params["spaceD"]
         
             filename = f"run0_{i}"
-            param_list.append(Params(params, self.param_spec, self.experiment_name, filename))
+            param_list.append(Params(params, self.param_spec, self.experiment_name, filename, self.mutation_sigma))
         
         return param_list
     
@@ -754,8 +762,10 @@ def aesthetic_evolution(experiment_name: str,
                         param_spec_filepath: str,
                         sketch_dir: str,
                         prompt: str,
-                        alpha_mode: str = "random",
-                        alpha: float = 0.5,
+                        alpha_mode: str,
+                        alpha: float,
+                        mutation_rate: float,
+                        mutation_sigma: float,
                         population_size: int = 20,
                         processing: str = "serial",
                         screen: bool = False,
@@ -781,6 +791,10 @@ def aesthetic_evolution(experiment_name: str,
     :type alpha: float
     :param population_size: Number of individuals in the population.
     :type population_size: int
+    :param mutation_rate: Mutation rate for the evolutionary process.
+    :type mutation_rate: float
+    :param mutation_sigma: Mutation sigma for the evolutionary process.
+    :type mutation_sigma: float
     :param processing: Processing mode, either "serial" or "parallel".
     :type processing: str
     :param screen: Whether to display the screen during processing.

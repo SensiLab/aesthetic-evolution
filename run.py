@@ -46,6 +46,14 @@ if evo_config["alpha_mode"] == "fixed":
     assert alpha is not None, "Alpha value must be provided for fixed alpha mode."
     assert 0 <= alpha <= 1, "Alpha must be between 0 and 1."
 
+# retrieve check mutation rate
+mutation_rate = evo_config.get("mutation_rate", 0.1)
+assert 0 <= mutation_rate <= 1, "Mutation rate must be between 0 and 1."
+
+# check mutation sigma
+mutation_sigma = evo_config.get("mutation_sigma", 0.1)
+assert mutation_sigma > 0, "Mutation sigma must be positive."
+
 
 ##### START EXPERIMENT #####
 
@@ -60,6 +68,10 @@ aesthetic_evolution(
     param_spec_filepath=job_config['param_spec_file'],
     sketch_dir=job_config['sketch_dir'],
     prompt=prompt,
+    alpha_mode=evo_config['alpha_mode'],
+    alpha=evo_config.get('alpha', None),
+    mutation_rate=mutation_rate,
+    mutation_sigma=mutation_sigma,
     population_size=evo_config.get('population_size', 20),
     processing=job_config.get('processing', 'serial'),
     screen=job_config.get('screen', False),
