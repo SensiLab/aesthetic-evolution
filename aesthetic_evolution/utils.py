@@ -83,6 +83,7 @@ def calc_ranks(results: List[dict], n: int):
 def plot_image_grid(filenames: list,
                     nrows: int,
                     ncols: int,
+                    population_size: int,
                     filepath=str,
                     ranks=None,
                     save_path:str=".",
@@ -98,6 +99,8 @@ def plot_image_grid(filenames: list,
     :type nrows: int
     :param ncols: Number of columns in the grid.
     :type ncols: int
+    :param population_size: Total number of images in the population.
+    :type population_size: int
     :param filepath: Path to the directory containing the images.
     :type filepath: str
     :param ranks: Optional list of rank scores for each image.
@@ -107,6 +110,9 @@ def plot_image_grid(filenames: list,
     for i in range(nrows):
         for j in range(ncols):
             idx = i * ncols + j
+            if idx >= population_size:
+                ax[i, j].axis('off')
+                continue
             img = plt.imread(os.path.join(filepath, filenames[idx]))
             ax[i, j].imshow(img)
             if ranks is not None:

@@ -11,9 +11,9 @@ import time
 import torch
 import yaml
 
-from utils import build_messages, calc_ranks, plot_image_grid
+from aesthetic_evolution.utils import build_messages, calc_ranks, plot_image_grid
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from process_batch import Qwen3VLBatchProcessor
+from aesthetic_evolution.process_batch import Qwen3VLBatchProcessor
 from typing import List, Tuple
 from tqdm import tqdm
 
@@ -334,6 +334,7 @@ class DesignGenerator:
                     for job in jobs
                 ]
 
+            # TODO: what if a job crashes here? how do we handle missing one image?
             for f in as_completed(futures):
                 try:
                     results.append(f.result())
@@ -574,12 +575,7 @@ class DesignEvolver:
 
         # plot images
         if plot:
-            plot_image_grid(filenames[sorted_idx], 
-                            nrows=5, ncols=4, 
-                            filepath=population_image_fileapath, 
-                            ranks=ranks[sorted_idx], 
-                            save_path=population_image_fileapath, 
-                            image_name=f'Population {self.current_population} Rankings')
+            self._plot_population(ranks=ranks[sorted_idx], image_name=f'Population {self.current_population} Rankings')
 
     
     def evolve_population(self) -> None:
@@ -594,14 +590,14 @@ class DesignEvolver:
         :rtype: None
         """
 
-        # update current population count
-        self.current_population += 1
-
         # sample new population based on ranking probabilities derived from tournament selection
         sampled_pop = random.choices(self.population_params, weights=self.ranking_probabilities, k=len(self.population_params))
-
+        self._plot_population(params=sampled_pop, image_name=f'Population {self.current_population} Selected for Breeding')
         # select N couples for crossover
         sampled_couples = [random.choices(sampled_pop, k=2) for _ in range(len(sampled_pop))]
+
+        # update current population count
+        self.current_population += 1
 
         # perform crossover to create new population
         children = []
@@ -626,26 +622,45 @@ class DesignEvolver:
         self.population_params = children
 
 
-    # TODO: handle different population sizes
-    def _plot_population(self) -> None:
+    def _plot_population(self,
+                         params: List[Params]=None,
+                         ranks: np.ndarray=None,
+                         image_name: str=None) -> None:
         """
         Method plots the current population images in a grid.
         @author: Stephen Krol
         @date: Jan 2026
         
         :param self: Current instance of the class.
+        :param params: Optional list of Params objects for the population.
+        :type params: List[Params] or None
+        :param ranks: Optional array of ranks for the population.
+        :type ranks: np.ndarray or None
+        :param image_name: Optional name for the saved image file.
+        :type image_name: str or None
 
         :return: None
         :rtype: None
         """
 
-        filenames = np.array([f"{param.name}.png" for param in self.population_params])
         population_image_fileapath = f"{self.design_path}/run{self.current_population}/Images"
+        grid_estimate = math.sqrt(self.population_size)
+
+        if image_name is None:
+            image_name = f'Population {self.current_population} Designs'
+
+        if params is None:
+            filenames = np.array([f"{param.name}.png" for param in self.population_params])
+        else:
+            filenames = np.array([f"{param.name}.png" for param in params])
+
         plot_image_grid(filenames, 
-                        nrows=5, ncols=4, 
+                        nrows=math.ceil(grid_estimate), ncols=math.floor(grid_estimate), 
+                        population_size=self.population_size,
                         filepath=population_image_fileapath, 
                         save_path=population_image_fileapath, 
-                        image_name=f'Population {self.current_population} Designs')
+                        ranks=ranks,
+                        image_name=image_name)
 
     def _calc_ranking_probabilities(self, N: int, k: int) -> np.ndarray:
         """
@@ -830,6 +845,8 @@ def aesthetic_evolution(experiment_name: str,
         k=k,
         alpha_mode=alpha_mode,
         alpha=alpha,
+        mutation_rate=mutation_rate,
+        mutation_sigma=mutation_sigma,
         plot_pop=True
     )
 
