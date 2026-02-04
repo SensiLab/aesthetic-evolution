@@ -135,7 +135,7 @@ This project requires **CUDA 12.8**. The dependencies include:
 
 ### Generation Workflow in `run.py`
 
-The `run.py` script orchestrates the complete evolutionary pipeline. It loads configuration from `experiment_config.yaml` and calls the `aesthetic_evolution()` function from `generate_designs.py`.
+The `run.py` script orchestrates the complete evolutionary pipeline. It loads configuration from `config/experiment_config.yaml` and calls the `aesthetic_evolution()` function from `generate_designs.py`.
 
 **Workflow Steps**:
 
@@ -179,7 +179,7 @@ The `run.py` script orchestrates the complete evolutionary pipeline. It loads co
 
 ### Configuration
 
-All experiment parameters are configured in [experiment_config.yaml](experiment_config.yaml), which is organized into two sections:
+All experiment parameters are configured in [config/experiment_config.yaml](config/experiment_config.yaml), which is organized into two sections:
 
 #### Job Configuration
 
@@ -188,9 +188,9 @@ The `job` section contains settings related to the Processing sketch and executi
 ```yaml
 job:
   experiment_name: "experiment"                  # Experiment identifier
-  param_spec_file: "param_spec.yaml"             # Parameter schema file
+  param_spec_file: "config/param_spec.yaml"      # Parameter schema file
   sketch_dir: "/path/to/Harmonograph"            # Processing sketch directory
-  prompt_filepath: "prompt.txt"                  # Path to LLM prompt file
+  prompt_filepath: "config/prompt.txt"           # Path to LLM prompt file
   processing: "parallel"                          # "serial" or "parallel"
   screen: False                                   # Use xvfb for headless rendering
   workers: 8                                      # Parallel workers
@@ -218,7 +218,7 @@ evo:
 
 **LLM Prompt File**:
 
-The prompt is now stored in a separate file (e.g., [prompt.txt](prompt.txt)):
+The prompt is now stored in a separate file (e.g., [config/prompt.txt](config/prompt.txt)):
 
 ```text
 You will be given two images.
@@ -238,10 +238,10 @@ Output ONLY '1' or '2'.
 ### Running an Experiment
 
 1. **Configure parameters**:
-   - Edit [experiment_config.yaml](experiment_config.yaml):
+   - Edit [config/experiment_config.yaml](config/experiment_config.yaml):
      - **Job section**: Set `sketch_dir` to your Processing sketch path, `experiment_name`, and execution settings
      - **Evo section**: Configure evolutionary parameters (`population_size`, `runs`, `mutation_rate`, `k`, `alpha_mode`)
-   - Edit [prompt.txt](prompt.txt) to customize LLM aesthetic evaluation criteria
+   - Edit [config/prompt.txt](config/prompt.txt) to customize LLM aesthetic evaluation criteria
    - Note: Script will prompt if experiment already exists
 
 2. **Execute**:
@@ -250,7 +250,7 @@ Output ONLY '1' or '2'.
    ```
    
    The script will:
-   - Load configuration from `experiment_config.yaml`
+   - Load configuration from `config/experiment_config.yaml`
    - Check if experiment already exists and prompt for overwrite
    - Display loaded configuration
    - Run the evolutionary process
@@ -285,7 +285,7 @@ Experiments/
 
 ## Parameter Specification
 
-Parameters are defined in [param_spec.yaml](param_spec.yaml) with:
+Parameters are defined in [config/param_spec.yaml](config/param_spec.yaml) with:
 
 ```yaml
 parameter_name:
@@ -323,7 +323,7 @@ See [requirements.txt](requirements.txt) for complete list.
 
 ## Extending
 
-- **New Parameter Types**: Add to `param_spec.yaml` and update `Params` class categorization
+- **New Parameter Types**: Add to `config/param_spec.yaml` and update `Params` class categorization
 - **Custom Selection**: Modify `evolve_population()` sampling strategy
 - **Multi-objective Optimization**: Extend `calc_ranks()` for multiple fitness criteria
 - **Checkpointing**: Add serialization of `population_params` between runs (not currently implemented)
