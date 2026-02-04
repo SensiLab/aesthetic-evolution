@@ -1,6 +1,6 @@
 
 job:
-  experiment_name: "alpha-biased-test-1"
+  experiment_name: "low-k-test-1"
   param_spec_file: "param_spec.yaml"
   sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
   prompt_filepath: "prompt.txt"
@@ -15,6 +15,7 @@ evo:
   population_size: 20
   mutation_rate: 0.1 # chance of single attribute mutating
   mutation_sigma: 0.1 # sd of guassian noise added to continuous variables
+  k: 0.1 # percentage of designs to be selected for tournament selection
   
 
 

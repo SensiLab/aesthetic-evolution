@@ -766,6 +766,7 @@ def aesthetic_evolution(experiment_name: str,
                         alpha: float,
                         mutation_rate: float,
                         mutation_sigma: float,
+                        k: float,
                         population_size: int = 20,
                         processing: str = "serial",
                         screen: bool = False,
@@ -795,6 +796,8 @@ def aesthetic_evolution(experiment_name: str,
     :type mutation_rate: float
     :param mutation_sigma: Mutation sigma for the evolutionary process.
     :type mutation_sigma: float
+    :param k: Tournament size for selection as a percentage of the population.
+    :type k: float
     :param processing: Processing mode, either "serial" or "parallel".
     :type processing: str
     :param screen: Whether to display the screen during processing.
@@ -814,6 +817,9 @@ def aesthetic_evolution(experiment_name: str,
             screen=screen,
             workers=workers
         )
+    
+    # caluclate tournament size
+    k = max(2, round(k * population_size))
 
     # initialise evolver
     evolver = DesignEvolver(
@@ -821,7 +827,7 @@ def aesthetic_evolution(experiment_name: str,
         experiment_name=experiment_name,
         prompt=prompt,
         n=population_size,
-        k=5,
+        k=k,
         alpha_mode=alpha_mode,
         alpha=alpha,
         plot_pop=True

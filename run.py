@@ -69,11 +69,12 @@ aesthetic_evolution(
     sketch_dir=job_config['sketch_dir'],
     prompt=prompt,
     alpha_mode=evo_config['alpha_mode'],
-    alpha=evo_config.get('alpha', None),
+    alpha=evo_config["alpha"],
     mutation_rate=mutation_rate,
     mutation_sigma=mutation_sigma,
-    population_size=evo_config.get('population_size', 20),
-    processing=job_config.get('processing', 'serial'),
+    k=evo_config["k"],
+    population_size=evo_config["population_size"],
+    processing=job_config["processing"],
     screen=job_config.get('screen', False),
     workers=job_config.get('workers', 8)
 )
