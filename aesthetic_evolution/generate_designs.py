@@ -11,9 +11,9 @@ import time
 import torch
 import yaml
 
-from utils import build_messages, calc_ranks, plot_image_grid
+from aesthetic_evolution.utils import build_messages, calc_ranks, plot_image_grid
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from process_batch import Qwen3VLBatchProcessor
+from aesthetic_evolution.process_batch import Qwen3VLBatchProcessor
 from typing import List, Tuple
 from tqdm import tqdm
 

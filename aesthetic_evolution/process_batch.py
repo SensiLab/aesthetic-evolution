@@ -12,7 +12,7 @@ from typing import List, Dict
 import time
 from tqdm import tqdm
 
-from utils import ComparisonJob
+from aesthetic_evolution.utils import ComparisonJob
 
 # TODO: add argumment for printing/logging performance
 class Qwen3VLBatchProcessor:
