@@ -8,10 +8,10 @@ import yaml
 from aesthetic_evolution.generate_designs import aesthetic_evolution
 
 # check confif file exists
-assert os.path.exists("experiment_config.yaml"), "Config file 'experiment_config.yaml' not found."
+assert os.path.exists("config/experiment_config.yaml"), "Config file 'experiment_config.yaml' not found."
 
 # load config file
-with open("experiment_config.yaml", 'r') as file:
+with open("config/experiment_config.yaml", 'r') as file:
     configuration = yaml.safe_load(file)
 
 #### LOAD JOB CONFIGURATION #####
