@@ -574,12 +574,7 @@ class DesignEvolver:
 
         # plot images
         if plot:
-            plot_image_grid(filenames[sorted_idx], 
-                            nrows=5, ncols=4, 
-                            filepath=population_image_fileapath, 
-                            ranks=ranks[sorted_idx], 
-                            save_path=population_image_fileapath, 
-                            image_name=f'Population {self.current_population} Rankings')
+            self._plot_population(ranks=ranks[sorted_idx], image_name=f'Population {self.current_population} Rankings')
 
     
     def evolve_population(self) -> None:
@@ -626,14 +621,17 @@ class DesignEvolver:
         self.population_params = children
 
 
-    # TODO: handle different population sizes
-    def _plot_population(self) -> None:
+    def _plot_population(self,
+                         ranks: np.ndarray=None,
+                         image_name: str=None) -> None:
         """
         Method plots the current population images in a grid.
         @author: Stephen Krol
         @date: Jan 2026
         
         :param self: Current instance of the class.
+        :param ranks: Optional array of ranks for the population.
+        :type ranks: np.ndarray
 
         :return: None
         :rtype: None
@@ -643,11 +641,16 @@ class DesignEvolver:
         population_image_fileapath = f"{self.design_path}/run{self.current_population}/Images"
         grid_estimate = math.sqrt(self.population_size)
 
+        if image_name is None:
+            image_name = f'Population {self.current_population} Designs'
+
         plot_image_grid(filenames, 
                         nrows=math.ceil(grid_estimate), ncols=math.floor(grid_estimate), 
+                        population_size=self.population_size,
                         filepath=population_image_fileapath, 
                         save_path=population_image_fileapath, 
-                        image_name=f'Population {self.current_population} Designs')
+                        ranks=ranks,
+                        image_name=image_name)
 
     def _calc_ranking_probabilities(self, N: int, k: int) -> np.ndarray:
         """
