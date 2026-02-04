@@ -334,6 +334,7 @@ class DesignGenerator:
                     for job in jobs
                 ]
 
+            # TODO: what if a job crashes here? how do we handle missing one image?
             for f in as_completed(futures):
                 try:
                     results.append(f.result())
@@ -589,14 +590,14 @@ class DesignEvolver:
         :rtype: None
         """
 
-        # update current population count
-        self.current_population += 1
-
         # sample new population based on ranking probabilities derived from tournament selection
         sampled_pop = random.choices(self.population_params, weights=self.ranking_probabilities, k=len(self.population_params))
-
+        self._plot_population(params=sampled_pop, image_name=f'Population {self.current_population} Selected for Breeding')
         # select N couples for crossover
         sampled_couples = [random.choices(sampled_pop, k=2) for _ in range(len(sampled_pop))]
+
+        # update current population count
+        self.current_population += 1
 
         # perform crossover to create new population
         children = []
@@ -622,6 +623,7 @@ class DesignEvolver:
 
 
     def _plot_population(self,
+                         params: List[Params]=None,
                          ranks: np.ndarray=None,
                          image_name: str=None) -> None:
         """
@@ -630,19 +632,27 @@ class DesignEvolver:
         @date: Jan 2026
         
         :param self: Current instance of the class.
+        :param params: Optional list of Params objects for the population.
+        :type params: List[Params] or None
         :param ranks: Optional array of ranks for the population.
-        :type ranks: np.ndarray
+        :type ranks: np.ndarray or None
+        :param image_name: Optional name for the saved image file.
+        :type image_name: str or None
 
         :return: None
         :rtype: None
         """
 
-        filenames = np.array([f"{param.name}.png" for param in self.population_params])
         population_image_fileapath = f"{self.design_path}/run{self.current_population}/Images"
         grid_estimate = math.sqrt(self.population_size)
 
         if image_name is None:
             image_name = f'Population {self.current_population} Designs'
+
+        if params is None:
+            filenames = np.array([f"{param.name}.png" for param in self.population_params])
+        else:
+            filenames = np.array([f"{param.name}.png" for param in params])
 
         plot_image_grid(filenames, 
                         nrows=math.ceil(grid_estimate), ncols=math.floor(grid_estimate), 
