@@ -179,43 +179,70 @@ The `run.py` script orchestrates the complete evolutionary pipeline. It loads co
 
 ### Configuration
 
-All experiment parameters are configured in [experiment_config.yaml](experiment_config.yaml):
+All experiment parameters are configured in [experiment_config.yaml](experiment_config.yaml), which is organized into two sections:
+
+#### Job Configuration
+
+The `job` section contains settings related to the Processing sketch and execution environment:
 
 ```yaml
-experiment_name: "experiment"                  # Experiment identifier
-param_spec_file: "param_spec.yaml"             # Parameter schema
-sketch_dir: "/path/to/Harmonograph"            # Processing sketch directory
-population_size: 20                             # Population size (must be even)
-processing: "parallel"                          # "serial" or "parallel"
-screen: False                                   # Use xvfb for headless rendering
-workers: 8                                      # Parallel workers
-runs: 5                                         # Number of generations
-prompt: "..."                                   # LLM evaluation prompt (see below)
+job:
+  experiment_name: "experiment"                  # Experiment identifier
+  param_spec_file: "param_spec.yaml"             # Parameter schema file
+  sketch_dir: "/path/to/Harmonograph"            # Processing sketch directory
+  prompt_filepath: "prompt.txt"                  # Path to LLM prompt file
+  processing: "parallel"                          # "serial" or "parallel"
+  screen: False                                   # Use xvfb for headless rendering
+  workers: 8                                      # Parallel workers
 ```
 
-**LLM Prompt Example**:
+#### Evolution Configuration
+
+The `evo` section contains evolutionary algorithm parameters:
+
 ```yaml
-prompt: "You will be given two images.
+evo:
+  alpha_mode: "biased"        # Crossover mode: "fixed", "random", or "biased"
+  alpha: 0.5                  # Fixed alpha value (used when alpha_mode="fixed")
+  runs: 5                     # Number of generations
+  population_size: 20         # Population size (must be even)
+  mutation_rate: 0.1          # Probability of each parameter mutating
+  mutation_sigma: 0.1         # Standard deviation for Gaussian mutation
+  k: 0.25                     # Percentage of population in tournament selection
+```
 
-        IMPORTANT RULES (must be followed):
-        - Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
-        - Visible line structure and repeating patterns are REQUIRED for a high score.
-        - Messy noise or amorphous shapes should be ranked lower.
+**Alpha Mode Options**:
+- `"fixed"`: Uses the specified `alpha` value for all crossovers
+- `"random"`: Randomly samples alpha for each crossover
+- `"biased"`: Biases alpha toward higher-ranked parent
 
-        Task:
-        Choose which image is more aesthetically pleasing according to the rules above.
-        Output ONLY '1' or '2'."
+**LLM Prompt File**:
+
+The prompt is now stored in a separate file (e.g., [prompt.txt](prompt.txt)):
+
+```text
+You will be given two images.
+
+IMPORTANT RULES (must be followed):
+- Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
+- Visible line structure and repeating patterns are REQUIRED for a high score.
+- Messy noise or amorphous shapes should be ranked lower.
+
+Task:
+Choose which image is more aesthetically pleasing according to the rules above.
+Output ONLY '1' or '2'.
 ```
 
 ## Usage
 
 ### Running an Experiment
 
-1. **Configure parameters** in [experiment_config.yaml](experiment_config.yaml):
-   - Set your `sketch_dir` path to your Processing sketch
-   - Customize the LLM `prompt` for desired aesthetic criteria
-   - Adjust `population_size` and `runs` (number of generations)
-   - Set `experiment_name` (script will prompt if experiment already exists)
+1. **Configure parameters**:
+   - Edit [experiment_config.yaml](experiment_config.yaml):
+     - **Job section**: Set `sketch_dir` to your Processing sketch path, `experiment_name`, and execution settings
+     - **Evo section**: Configure evolutionary parameters (`population_size`, `runs`, `mutation_rate`, `k`, `alpha_mode`)
+   - Edit [prompt.txt](prompt.txt) to customize LLM aesthetic evaluation criteria
+   - Note: Script will prompt if experiment already exists
 
 2. **Execute**:
    ```bash
@@ -291,7 +318,8 @@ See [requirements.txt](requirements.txt) for complete list.
 - **GPU Memory**: Default chunk_size=32 for batch processing; reduce if OOM occurs
 - **Generation Time**: Parallel mode significantly faster; adjust `workers` based on CPU cores
 - **Timeout**: 20s limit per design render to prevent hangs; may need adjustment for complex sketches
-- **Selection Pressure**: Tournament size k=5 balances exploration vs exploitation
+- **Selection Pressure**: Tournament parameter `k` (as percentage) controls selection pressure; higher k = more elitism
+- **Mutation**: `mutation_rate` controls per-parameter mutation probability; `mutation_sigma` controls magnitude
 
 ## Extending
 
