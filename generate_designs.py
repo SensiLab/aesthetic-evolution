@@ -641,8 +641,10 @@ class DesignEvolver:
 
         filenames = np.array([f"{param.name}.png" for param in self.population_params])
         population_image_fileapath = f"{self.design_path}/run{self.current_population}/Images"
+        grid_estimate = math.sqrt(self.population_size)
+
         plot_image_grid(filenames, 
-                        nrows=5, ncols=4, 
+                        nrows=math.ceil(grid_estimate), ncols=math.floor(grid_estimate), 
                         filepath=population_image_fileapath, 
                         save_path=population_image_fileapath, 
                         image_name=f'Population {self.current_population} Designs')
@@ -830,6 +832,8 @@ def aesthetic_evolution(experiment_name: str,
         k=k,
         alpha_mode=alpha_mode,
         alpha=alpha,
+        mutation_rate=mutation_rate,
+        mutation_sigma=mutation_sigma,
         plot_pop=True
     )
 
