@@ -55,7 +55,7 @@ class Qwen3VLBatchProcessor:
         :return: List of results for each job. 
         :rtype: List[Dict]
         """
-        print(f"Processing {len(jobs)} jobs in parallel on GPU...")
+        # print(f"Processing {len(jobs)} jobs in parallel on GPU...")
         start_time = time.time()
         
         try:
