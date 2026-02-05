@@ -26,7 +26,7 @@ def build_messages(data: np.ndarray,
                    prompt: str) -> List[ComparisonJob]:
     """
     Function takes a list of images and builds comparison jobs
-    for all unique pairs.
+    for all unique pairs. Assumes images are in the order of their indices.
     @author: Stephen Krol
     @Date: Jan 2026
     
@@ -72,7 +72,19 @@ def calc_ranks(results: List[dict], n: int):
     ranks = np.zeros((n, n))
     for result in results:
         i, j = map(int, result["job_id"].split("_")[1:])
-        rank = int(result["result"].strip())
+
+        # if the model is reasoning step-by-step, the result will be in the last character of the output
+        if len(result["result"]) > 1:
+            try:
+                rank = int(result["result"][-1].strip())
+            except Exception as e:
+
+                print(result["result"])
+                raise(e)
+                
+        else:
+            rank = int(result["result"].strip())
+
         if rank == 1:
             ranks[i, j] += 1
         else:
@@ -84,8 +96,9 @@ def plot_image_grid(filenames: list,
                     nrows: int,
                     ncols: int,
                     population_size: int,
-                    filepath=str,
-                    ranks=None,
+                    filepath:str,
+                    ranks:list=None,
+                    plot:bool=False,
                     save_path:str=".",
                     image_name="Rankings"):
     """
@@ -105,6 +118,15 @@ def plot_image_grid(filenames: list,
     :type filepath: str
     :param ranks: Optional list of rank scores for each image.
     :type ranks: list like or None
+    :param plot: Whether to display the plot or save image.
+    :type plot: bool
+    :param save_path: Directory to save the plotted image.
+    :type save_path: str
+    :param image_name: Filename for the saved image.
+    :type image_name: str
+
+    :return: None
+    :rtype: None
     """
     fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 10))
     for i in range(nrows):
@@ -121,7 +143,11 @@ def plot_image_grid(filenames: list,
                 ax[i, j].set_title(filenames[idx].split('_')[-1].strip('.png'))
             ax[i, j].axis('off')
     plt.tight_layout()
-    plt.savefig(f"{save_path}/{image_name}.png")
+
+    if plot:
+        plt.show()
+    else:
+        plt.savefig(f"{save_path}/{image_name}.png")
 
 
 def prob(k: int, N: int) -> np.ndarray:
