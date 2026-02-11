@@ -183,10 +183,10 @@ class Params:
         :rtype: None
         """
 
-        full_path = f"{filepath}/{filename}"
-        image_path = f"{os.getcwd()}/Experiments/{self.experiment_name}/{population_name}/Images/{filename}.png"
+        json_path = f"{filepath}/Params/{filename}"
+        image_path = f"{os.getcwd()}/{filepath}/Images/{filename}.png"
 
-        with open(f'{full_path}.json', 'w') as f:
+        with open(f'{json_path}.json', 'w') as f:
             json.dump({"parameters": self.params, 
                        "filepath": image_path}, f, indent=4)
     
@@ -286,7 +286,8 @@ class DesignGenerator:
 
     def generate_population(self, 
                             pop_name: str,
-                            params: list) -> None:
+                            params: list,
+                            base_filepath: str = None) -> None:
         """
         Method generates a population of designs.
         @author: Stephen Krol
@@ -297,6 +298,8 @@ class DesignGenerator:
         :type pop_name: str
         :param params: List of Params objects for the population.
         :type params: list like
+        :param base_path: Base path for saving generated designs. If None, uses default experiment directory.
+        :type base_path: str or None
 
         :return: None
         :rtype: None
@@ -308,9 +311,11 @@ class DesignGenerator:
         start = time.time()
         jobs = []
 
-        base_filepath = f"Experiments/{self.experiment_name}/{pop_name}"
+        if base_filepath is None:
+            base_filepath = f"Experiments/{self.experiment_name}/{pop_name}"
         
         self._initialise_design(pop_name)
+        cwd = os.getcwd()
 
         # build jobs for generation
         for i in tqdm(range(n)):
@@ -318,8 +323,10 @@ class DesignGenerator:
             # write JSON parameters for initial population
             individual = params[i]
             filename = f"{individual.name}"
-            individual.write_json(f"{base_filepath}/Params", f"{filename}", pop_name)
-            jobs.append((pop_name, filename, self.sketch_dir, self.experiment_name, self.screen))
+            individual.write_json(base_filepath, f"{filename}", pop_name)
+            param_filepath = f"{cwd}/{base_filepath}/Params/{filename}.json"
+
+            jobs.append((param_filepath, self.sketch_dir, self.screen))
 
         if self.processing == "serial": # generate images serially
             for job in tqdm(jobs):
@@ -353,7 +360,7 @@ class DesignGenerator:
 
 
     @staticmethod
-    def generate_image(jobs: Tuple[str, str, str, str, bool]) -> None:
+    def generate_image(jobs: Tuple[str, str, bool]) -> None:
         """
         Generate image calls processing to generate an image from parameters.
         Arguments are passed as a tuple for compatibility with ProcessPoolExecutor.
@@ -361,18 +368,15 @@ class DesignGenerator:
         @date: Jan 2026
         
         :param jobs: A tuple containing the arguments for generation. 
-            Arg1 is population name, Arg2 is filename, Arg3 is sketch directory,
-            Arg4 is experiment name, Arg5 is screen boolean.
-        :type jobs: Tuple[str, str, str, str, bool]
+            Arg1 is parameter file path, Arg2 is sketch directory,
+            Arg3 is screen boolean.
+        :type jobs: Tuple[str, str, bool]
 
         :return: None
         :rtype: None
         """
 
-        population_name, filename, sketch_dir, experiment_name, screen = jobs
-
-        cwd = os.getcwd()
-        filepath = f"{cwd}/Experiments/{experiment_name}/{population_name}/Params/{filename}.json"
+        filepath, sketch_dir, screen = jobs
 
         # if screen is available
         if screen:
@@ -382,7 +386,7 @@ class DesignGenerator:
                 "--run",
                 filepath], 
                 check=True,
-                cwd=cwd,
+                cwd=os.getcwd(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL)
         else:
@@ -396,7 +400,7 @@ class DesignGenerator:
                     filepath], 
                     timeout=20,
                     check=True,
-                    cwd=cwd,
+                    cwd=os.getcwd(),
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL)
             except subprocess.TimeoutExpired:
@@ -499,7 +503,7 @@ class DesignEvolver:
 
         # read param spec
         assert os.path.exists(spec_filepath), f"Spec filepath: f{spec_filepath} does not exist"
-        self.param_spec = self._read_param_spec(spec_filepath)
+        self.param_spec = DesignEvolver.read_param_spec(spec_filepath)
 
         # set population size
         self.population_size = n
@@ -529,7 +533,7 @@ class DesignEvolver:
         self.mutation_sigma = mutation_sigma
 
         # set initial population parameters
-        self.population_params = DesignEvolver._generate_initial_params(self.population_size,
+        self.population_params = DesignEvolver.generate_initial_params(self.population_size,
                                                                         self.param_spec, 
                                                                         self.experiment_name, 
                                                                         self.mutation_sigma)
@@ -625,7 +629,28 @@ class DesignEvolver:
         self.population_params = children
 
     @staticmethod
-    def _generate_initial_params(population_size: int, 
+    def read_param_spec(spec_filepath: str) -> dict:
+        """
+        Method reads parameter specification from a YAML file.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param spec_filepath: Filepath to the YAML specification file.
+        :type spec_filepath: str
+
+        :return: Parameter specification as a dictionary.
+        :rtype: dict
+        """
+
+        # Use a context manager to open and automatically close the file
+        with open(spec_filepath, 'r') as file:
+            # Use safe_load to safely parse the YAML content
+            configuration = yaml.safe_load(file)
+        
+        return configuration
+
+    @staticmethod
+    def generate_initial_params(population_size: int, 
                                  param_spec: dict, 
                                  experiment_name: str, 
                                  mutation_sigma: float) -> List[Params]:
@@ -740,27 +765,6 @@ class DesignEvolver:
 
         # Probability of r-th item being the highest ranked in radomly selected k items
         return (1 - (r - 1) / N) ** k - (1 - r / N) ** k 
-
-    def _read_param_spec(self, spec_filepath: str) -> dict:
-        """
-        Method reads parameter specification from a YAML file.
-        @author: Stephen Krol
-        @date: Jan 2026
-        
-        :param self: Current instance of the class.
-        :param spec_filepath: Filepath to the YAML specification file.
-        :type spec_filepath: str
-
-        :return: Parameter specification as a dictionary.
-        :rtype: dict
-        """
-
-        # Use a context manager to open and automatically close the file
-        with open(spec_filepath, 'r') as file:
-            # Use safe_load to safely parse the YAML content
-            configuration = yaml.safe_load(file)
-        
-        return configuration
     
     def _calculate_alpha(self, score1: float, score2: float) -> float:
         """
