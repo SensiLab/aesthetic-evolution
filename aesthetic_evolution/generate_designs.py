@@ -529,7 +529,10 @@ class DesignEvolver:
         self.mutation_sigma = mutation_sigma
 
         # set initial population parameters
-        self.population_params = self._generate_initial_params()
+        self.population_params = DesignEvolver._generate_initial_params(self.population_size,
+                                                                        self.param_spec, 
+                                                                        self.experiment_name, 
+                                                                        self.mutation_sigma)
         self.current_population = 0
 
         # initialise ranking probabilities
@@ -621,6 +624,61 @@ class DesignEvolver:
         
         self.population_params = children
 
+    @staticmethod
+    def _generate_initial_params(population_size: int, 
+                                 param_spec: dict, 
+                                 experiment_name: str, 
+                                 mutation_sigma: float) -> List[Params]:
+        """
+        Static method generates inital random parameters for sample.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param population_size: Number of individuals in the population.
+        :type population_size: int
+        :param param_spec: Parameter specification dictionary.
+        :type param_spec: dict
+        :param experiment_name: Name of the experiment.
+        :type experiment_name: str
+        :param mutation_sigma: Mutation sigma value.
+        :type mutation_sigma: float
+
+        :return: List of generated random Params objects.
+        :rtype: List[Params]
+        """
+
+        param_list = []
+
+        for i in range(population_size):
+
+            params = {}
+
+            # sample params using ranges from config
+            for param in param_spec:
+                param_config = param_spec[param]
+                if param_config["calc"] == True:
+                    continue
+                elif param_config["type"] == "categorical":
+                    params[param] = random.choice(param_config["values"])
+                    continue
+                elif param_config["type"] == "int":
+                    sample = random.randint
+                else:
+                    sample = random.uniform
+
+                params[param] = sample(param_config["min"], param_config["max"])
+
+            # calculate remaining params
+            params["dt"] = 1.0 / (params["fb"] * max(params["frx"], params["fry"] * params["sampleRate"]))
+
+            # spaceP
+            params["spaceP"] = 10**params["spaceD"]
+        
+            filename = f"run0_{i}"
+            param_list.append(Params(params, param_spec, experiment_name, filename, mutation_sigma))
+        
+        return param_list
+
 
     def _plot_population(self,
                          params: List[Params]=None,
@@ -703,50 +761,6 @@ class DesignEvolver:
             configuration = yaml.safe_load(file)
         
         return configuration
-    
-    def _generate_initial_params(self) -> List[Params]:
-        """
-        Method generates inital random parameters for sample.
-        @author: Stephen Krol
-        @date: Jan 2026
-        
-        :param self: Current instance of the class.
-
-        :return: List of generated random Params objects.
-        :rtype: List[Params]
-        """
-
-        param_list = []
-
-        for i in range(self.population_size):
-
-            params = {}
-
-            # sample params using ranges from config
-            for param in self.param_spec:
-                param_config = self.param_spec[param]
-                if param_config["calc"] == True:
-                    continue
-                elif param_config["type"] == "categorical":
-                    params[param] = random.choice(param_config["values"])
-                    continue
-                elif param_config["type"] == "int":
-                    sample = random.randint
-                else:
-                    sample = random.uniform
-
-                params[param] = sample(param_config["min"], param_config["max"])
-
-            # calculate remaining params
-            params["dt"] = 1.0 / (params["fb"] * max(params["frx"], params["fry"] * params["sampleRate"]))
-
-            # spaceP
-            params["spaceP"] = 10**params["spaceD"]
-        
-            filename = f"run0_{i}"
-            param_list.append(Params(params, self.param_spec, self.experiment_name, filename, self.mutation_sigma))
-        
-        return param_list
     
     def _calculate_alpha(self, score1: float, score2: float) -> float:
         """

@@ -7,5 +7,5 @@ IMPORTANT RULES (must be followed):
 - Winning designs must posses the best INTRICATE and CLEAR harmonic patterns.
 
 Task:
-Choose which image is more aesthetically pleasing according to the rules above.
+Choose which image is more aesthetically pleasing according to the rules above. If you cannot make a decision guess, do NOT ramble.
 Output a one sentence description of each image, a single sentence regarding your reasining and finally a single digit corresponding to which image is better ONLY '1' or '2'.

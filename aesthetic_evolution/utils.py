@@ -78,7 +78,7 @@ def calc_ranks(results: List[dict], n: int):
             try:
                 rank = int(result["result"][-1].strip())
             except Exception as e:
-
+                # TODO: deal with this more robustly, maybe by re-prompting the model or using a default value
                 print(result["result"])
                 raise(e)
                 
