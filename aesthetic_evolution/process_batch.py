@@ -113,29 +113,6 @@ class Qwen3VLBatchProcessor:
                 return_tensors="pt"
             )
             inputs = inputs.to(self.device)
-            # print(inputs["input_ids"].shape)
-
-            # Validation checks
-            # if validate:
-            #     print(f"\n{'='*60}")
-            #     print("VALIDATION CHECKS:")
-            #     print(f"{'='*60}")
-            #     print(f"Number of jobs: {len(jobs)}")
-            #     print(f"Number of text prompts: {len(texts)}")
-            #     # print(f"Number of images loaded: {len(all_images)}")
-            #     print(f"Expected images (2 per job): {len(jobs) * 2}")
-            #     print(f"Batch size in inputs: {inputs.input_ids.shape[0]}")
-                
-            #     # Verify batch size matches number of jobs
-            #     assert inputs.input_ids.shape[0] == len(jobs), \
-            #         f"Batch size mismatch! Expected {len(jobs)}, got {inputs.input_ids.shape[0]}"
-                
-            #     # Verify we have the right number of images
-            #     # assert len(all_images) == len(jobs) * 2, \
-            #     #     f"Image count mismatch! Expected {len(jobs) * 2}, got {len(all_images)}"
-                
-            #     print("✓ All validation checks passed!")
-            #     print(f"{'='*60}\n")
 
             torch.cuda.synchronize()
             start = time.perf_counter()

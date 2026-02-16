@@ -11,17 +11,19 @@ import time
 import torch
 import yaml
 
-from aesthetic_evolution.utils import build_messages, calc_ranks, plot_image_grid
+from aesthetic_evolution.utils import build_messages, calc_ranks, plot_image_grid, update_glicko_scores
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from aesthetic_evolution.process_batch import Qwen3VLBatchProcessor
+from aesthetic_evolution.process_batch import Qwen3VLBatchProcessor, ComparisonJob
+from aesthetic_evolution.glicko import Player, Q, MIN_DEVIATION
 from typing import List, Tuple
 from tqdm import tqdm
 
 
-class Params:
+class Params(Player):
     """
     Class to store and manage genotype parameters, handle parameter breeding and mutation,
-    and writing params to file.
+    and writing params to file. Params inherits from Player class to store Glicko scores for each parameter set.
+
     @author: Stephen Krol
     @date: Jan 2026
     """
@@ -50,6 +52,8 @@ class Params:
         :return: None
         :rtype: None
         """
+
+        super().__init__(id=name)
 
         # check filepath exists
         self.params = parameters
@@ -466,6 +470,7 @@ class DesignEvolver:
                  k: int,
                  alpha_mode: str,
                  alpha: float = None,
+                 ranking_method: str = "glicko",
                  mutation_rate: float = 0.1,
                  mutation_sigma: float = 0.1,
                  plot_pop: bool = False) -> None:
@@ -487,6 +492,8 @@ class DesignEvolver:
         :type k: int
         :param alpha_mode: Method for selecting alpha during crossover ("random", "fixed", "biased").
         :type alpha_mode: str
+        :param ranking_method: Method for ranking designs ("glicko" or "simple").
+        :type ranking_method: str
         :param alpha: Fixed alpha value if alpha_mode is "fixed" between 0 and 1.
         :type alpha: float
         :param plot_pop: Whether to plot the population images.
@@ -516,6 +523,10 @@ class DesignEvolver:
 
         self.alpha = alpha
 
+        # set ranking mode
+        assert ranking_method in ["glicko", "simple"], "Ranking method must be 'glicko' or 'simple'"
+        self.ranking_method = ranking_method
+
 
         # assign prompt
         self.prompt = prompt
@@ -537,6 +548,7 @@ class DesignEvolver:
                                                                         self.param_spec, 
                                                                         self.experiment_name, 
                                                                         self.mutation_sigma)
+        # set initial population count
         self.current_population = 0
 
         # initialise ranking probabilities
@@ -567,14 +579,21 @@ class DesignEvolver:
         jobs = build_messages(filenames, population_image_fileapath, self.prompt)
 
         # rank images using LLM
-        results = self.processor.process_batch_chunked(jobs, chunk_size=32)
+        if self.ranking_method == "simple":
+            
+            # TODO: update to run on the same method as glicko scores
+            results = self.processor.process_batch_chunked(jobs, chunk_size=32)
 
-        # calculate ranks
-        ranks = calc_ranks(results, len(filenames))
-        sorted_idx = np.argsort(ranks)[::-1]
-        sorted_ranks = ranks[sorted_idx]
+            # calculate ranks
+            ranks = calc_ranks(results, len(filenames))
+            sorted_idx = np.argsort(ranks)[::-1]
+
+        elif self.ranking_method == "glicko":
+            
+            sorted_idx, ranks = self._process_batch_chunked(jobs, chunk_size=32)
 
         self.population_params = [self.population_params[i] for i in sorted_idx]
+        sorted_ranks = ranks[sorted_idx]
 
         # set parameter scores
         for i in range(len(sorted_ranks)):
@@ -582,7 +601,7 @@ class DesignEvolver:
 
         # plot images
         if plot:
-            self._plot_population(ranks=ranks[sorted_idx], image_name=f'Population {self.current_population} Rankings')
+            self._plot_population(ranks=sorted_ranks, image_name=f'Population {self.current_population} Rankings')
 
     
     def evolve_population(self) -> None:
@@ -703,6 +722,48 @@ class DesignEvolver:
             param_list.append(Params(params, param_spec, experiment_name, filename, mutation_sigma))
         
         return param_list
+    
+    def _process_batch_chunked(self, jobs: List[ComparisonJob], chunk_size: int = 8) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Docstring for process_batch_chunked. Process a large batch of comparison jobs in smaller chunks to avoid OOM.
+        @author: sjkrol
+
+        :param jobs: List of ComparisonJob Objects
+        :type jobs: List[ComparisonJob]
+        :param chunk_size: Max size of each batch chunk
+        :type chunk_size: int
+
+        :return: Tuple containing an array of sorted indices based on Glicko ratings and an array of ranks
+        :rtype: Tuple[np.ndarray, np.ndarray]
+        """
+        all_results = []
+        total_jobs = len(jobs)
+
+        # shuffle jobs to ensure random distribution of comparisons across chunks, which might help with more stable Glicko score updates
+        random.shuffle(jobs)
+        
+        print(f"Processing {total_jobs} jobs in chunks of {chunk_size}...")
+        
+        for i in tqdm(range(0, total_jobs, chunk_size)):
+            chunk = jobs[i:i + chunk_size]
+            
+            chunk_results = self.processor.process_batch_parallel(chunk)
+            all_results.extend(chunk_results)
+
+            # TODO: experiment with updating after each individual game
+            # currently updates glicko score after each chunk, no garuntee on the number of comparisons each image is involved in per chunk, which might lead to some instability in score updates. 
+            # Glick recommends 5-10 comparisons per rating period, so we could experiment with different chunk sizes to see how it affects the stability of the ratings and ultimately the evolution process. 
+            # We could also consider updating ratings after each individual comparison, but that might be more computationally expensive.
+            update_glicko_scores(self.population_params, chunk_results)
+
+            
+            # Clear GPU cache between chunks
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            ranks = np.array([param.rating for param in self.population_params])
+
+        return np.argsort(ranks)[::-1], ranks
 
 
     def _plot_population(self,
@@ -800,6 +861,7 @@ def aesthetic_evolution(experiment_name: str,
                         mutation_rate: float,
                         mutation_sigma: float,
                         k: float,
+                        ranking_method: str = "glicko",
                         population_size: int = 20,
                         processing: str = "serial",
                         screen: bool = False,
@@ -831,6 +893,8 @@ def aesthetic_evolution(experiment_name: str,
     :type mutation_sigma: float
     :param k: Tournament size for selection as a percentage of the population.
     :type k: float
+    :param ranking_method: Method for ranking designs ("glicko" or "simple").
+    :type ranking_method: str
     :param processing: Processing mode, either "serial" or "parallel".
     :type processing: str
     :param screen: Whether to display the screen during processing.
@@ -865,6 +929,7 @@ def aesthetic_evolution(experiment_name: str,
         alpha=alpha,
         mutation_rate=mutation_rate,
         mutation_sigma=mutation_sigma,
+        ranking_method=ranking_method,
         plot_pop=True
     )
 

@@ -87,10 +87,87 @@ def calc_ranks(results: List[dict], n: int):
 
         if rank == 1:
             ranks[i, j] += 1
-        else:
+        elif rank == 2:
             ranks[j, i] += 1
 
     return ranks.sum(axis=1)
+
+def update_glicko_scores(players: list, results: List[dict]) -> None:
+    """
+    Function updates Glicko scores for each player based on comparison results.
+    Designed to work with batched generation where one batch is a rating period and
+    all comparisons in that batch are used to update scores at the end of the period.
+    @author: Stephen Krol
+    @Date: Jan 2026
+
+    :param players: List of Param instances representing each image's Glicko scores. 
+        Assumes players are indexed in the same order as their IDs in the comparison jobs.
+    :type players: list
+    :param results: List of result dictionaries from comparison jobs.
+    :type results: List[dict]
+
+    :return: None
+    :rtype: None
+    """
+
+    games = {}
+
+    # retrieve active players
+    for result in results:
+        i, j = map(int, result["job_id"].split("_")[1:])
+        if i not in games:
+            games[i] = {
+                "opponent_ratings": [],
+                "opponent_deviations": [],
+                "outcomes": []
+            }
+        if j not in games:
+            games[j] = {
+                "opponent_ratings": [],
+                "opponent_deviations": [],
+                "outcomes": []
+            }
+    
+    # pre rating update
+    # for player_id in games:
+    #     players[player_id].pre_rating_period_update(c=63.2)
+
+    snapshot_ratings = {player_id: players[player_id].rating for player_id in games}
+    snapshot_deviations = {player_id: players[player_id].deviation for player_id in games} 
+
+    # retrieve outcomes for each player and their opponents from results
+    for result in results:
+        i, j = map(int, result["job_id"].split("_")[1:])
+
+        if len(result["result"]) > 1:
+            try:
+                rank = int(result["result"][-1].strip())
+            except Exception as e:
+                print(result["result"])
+                raise(e)
+        else:
+            rank = int(result["result"].strip())
+
+        # score i
+        score_i = 1 if rank == 1 else 0.5 if rank == 3 else 0
+        games[i]["opponent_ratings"].append(snapshot_ratings[j])
+        games[i]["opponent_deviations"].append(snapshot_deviations[j])
+        games[i]["outcomes"].append(score_i)
+
+
+        # score j
+        score_j = 1 if rank == 2 else 0.5 if rank == 3 else 0
+        games[j]["opponent_ratings"].append(snapshot_ratings[i])
+        games[j]["opponent_deviations"].append(snapshot_deviations[i])
+        games[j]["outcomes"].append(score_j)
+
+    
+    # update ratings
+    for player_id, game in games.items():
+        players[player_id].update_rating(game["opponent_ratings"], game["opponent_deviations"], game["outcomes"])
+
+
+
 
 def plot_image_grid(filenames: list,
                     nrows: int,
@@ -138,7 +215,7 @@ def plot_image_grid(filenames: list,
             img = plt.imread(os.path.join(filepath, filenames[idx]))
             ax[i, j].imshow(img)
             if ranks is not None:
-                ax[i, j].set_title(f"{filenames[idx].split('_')[-1].strip('.png')} : {ranks[idx]}")
+                ax[i, j].set_title(f"{filenames[idx].split('_')[-1].strip('.png')} : {round(ranks[idx])}")
             else:
                 ax[i, j].set_title(filenames[idx].split('_')[-1].strip('.png'))
             ax[i, j].axis('off')
