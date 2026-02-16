@@ -11,17 +11,19 @@ import time
 import torch
 import yaml
 
-from aesthetic_evolution.utils import build_messages, calc_ranks, plot_image_grid
+from aesthetic_evolution.utils import build_messages, calc_ranks, plot_image_grid, update_glicko_scores
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from aesthetic_evolution.process_batch import Qwen3VLBatchProcessor
+from aesthetic_evolution.process_batch import Qwen3VLBatchProcessor, ComparisonJob
+from aesthetic_evolution.glicko import Player, Q, MIN_DEVIATION
 from typing import List, Tuple
 from tqdm import tqdm
 
 
-class Params:
+class Params(Player):
     """
     Class to store and manage genotype parameters, handle parameter breeding and mutation,
-    and writing params to file.
+    and writing params to file. Params inherits from Player class to store Glicko scores for each parameter set.
+
     @author: Stephen Krol
     @date: Jan 2026
     """
@@ -50,6 +52,8 @@ class Params:
         :return: None
         :rtype: None
         """
+
+        super().__init__(id=name)
 
         # check filepath exists
         self.params = parameters
@@ -183,10 +187,10 @@ class Params:
         :rtype: None
         """
 
-        full_path = f"{filepath}/{filename}"
-        image_path = f"{os.getcwd()}/Experiments/{self.experiment_name}/{population_name}/Images/{filename}.png"
+        json_path = f"{filepath}/Params/{filename}"
+        image_path = f"{os.getcwd()}/{filepath}/Images/{filename}.png"
 
-        with open(f'{full_path}.json', 'w') as f:
+        with open(f'{json_path}.json', 'w') as f:
             json.dump({"parameters": self.params, 
                        "filepath": image_path}, f, indent=4)
     
@@ -286,7 +290,8 @@ class DesignGenerator:
 
     def generate_population(self, 
                             pop_name: str,
-                            params: list) -> None:
+                            params: list,
+                            base_filepath: str = None) -> None:
         """
         Method generates a population of designs.
         @author: Stephen Krol
@@ -297,6 +302,8 @@ class DesignGenerator:
         :type pop_name: str
         :param params: List of Params objects for the population.
         :type params: list like
+        :param base_path: Base path for saving generated designs. If None, uses default experiment directory.
+        :type base_path: str or None
 
         :return: None
         :rtype: None
@@ -308,9 +315,11 @@ class DesignGenerator:
         start = time.time()
         jobs = []
 
-        base_filepath = f"Experiments/{self.experiment_name}/{pop_name}"
+        if base_filepath is None:
+            base_filepath = f"Experiments/{self.experiment_name}/{pop_name}"
         
         self._initialise_design(pop_name)
+        cwd = os.getcwd()
 
         # build jobs for generation
         for i in tqdm(range(n)):
@@ -318,8 +327,10 @@ class DesignGenerator:
             # write JSON parameters for initial population
             individual = params[i]
             filename = f"{individual.name}"
-            individual.write_json(f"{base_filepath}/Params", f"{filename}", pop_name)
-            jobs.append((pop_name, filename, self.sketch_dir, self.experiment_name, self.screen))
+            individual.write_json(base_filepath, f"{filename}", pop_name)
+            param_filepath = f"{cwd}/{base_filepath}/Params/{filename}.json"
+
+            jobs.append((param_filepath, self.sketch_dir, self.screen))
 
         if self.processing == "serial": # generate images serially
             for job in tqdm(jobs):
@@ -353,7 +364,7 @@ class DesignGenerator:
 
 
     @staticmethod
-    def generate_image(jobs: Tuple[str, str, str, str, bool]) -> None:
+    def generate_image(jobs: Tuple[str, str, bool]) -> None:
         """
         Generate image calls processing to generate an image from parameters.
         Arguments are passed as a tuple for compatibility with ProcessPoolExecutor.
@@ -361,18 +372,15 @@ class DesignGenerator:
         @date: Jan 2026
         
         :param jobs: A tuple containing the arguments for generation. 
-            Arg1 is population name, Arg2 is filename, Arg3 is sketch directory,
-            Arg4 is experiment name, Arg5 is screen boolean.
-        :type jobs: Tuple[str, str, str, str, bool]
+            Arg1 is parameter file path, Arg2 is sketch directory,
+            Arg3 is screen boolean.
+        :type jobs: Tuple[str, str, bool]
 
         :return: None
         :rtype: None
         """
 
-        population_name, filename, sketch_dir, experiment_name, screen = jobs
-
-        cwd = os.getcwd()
-        filepath = f"{cwd}/Experiments/{experiment_name}/{population_name}/Params/{filename}.json"
+        filepath, sketch_dir, screen = jobs
 
         # if screen is available
         if screen:
@@ -382,7 +390,7 @@ class DesignGenerator:
                 "--run",
                 filepath], 
                 check=True,
-                cwd=cwd,
+                cwd=os.getcwd(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL)
         else:
@@ -396,7 +404,7 @@ class DesignGenerator:
                     filepath], 
                     timeout=20,
                     check=True,
-                    cwd=cwd,
+                    cwd=os.getcwd(),
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL)
             except subprocess.TimeoutExpired:
@@ -462,6 +470,7 @@ class DesignEvolver:
                  k: int,
                  alpha_mode: str,
                  alpha: float = None,
+                 ranking_method: str = "glicko",
                  mutation_rate: float = 0.1,
                  mutation_sigma: float = 0.1,
                  plot_pop: bool = False) -> None:
@@ -483,6 +492,8 @@ class DesignEvolver:
         :type k: int
         :param alpha_mode: Method for selecting alpha during crossover ("random", "fixed", "biased").
         :type alpha_mode: str
+        :param ranking_method: Method for ranking designs ("glicko" or "simple").
+        :type ranking_method: str
         :param alpha: Fixed alpha value if alpha_mode is "fixed" between 0 and 1.
         :type alpha: float
         :param plot_pop: Whether to plot the population images.
@@ -499,7 +510,7 @@ class DesignEvolver:
 
         # read param spec
         assert os.path.exists(spec_filepath), f"Spec filepath: f{spec_filepath} does not exist"
-        self.param_spec = self._read_param_spec(spec_filepath)
+        self.param_spec = DesignEvolver.read_param_spec(spec_filepath)
 
         # set population size
         self.population_size = n
@@ -511,6 +522,10 @@ class DesignEvolver:
             assert 0 <= alpha <= 1, "Alpha must be between 0 and 1."
 
         self.alpha = alpha
+
+        # set ranking mode
+        assert ranking_method in ["glicko", "simple"], "Ranking method must be 'glicko' or 'simple'"
+        self.ranking_method = ranking_method
 
 
         # assign prompt
@@ -529,7 +544,11 @@ class DesignEvolver:
         self.mutation_sigma = mutation_sigma
 
         # set initial population parameters
-        self.population_params = self._generate_initial_params()
+        self.population_params = DesignEvolver.generate_initial_params(self.population_size,
+                                                                        self.param_spec, 
+                                                                        self.experiment_name, 
+                                                                        self.mutation_sigma)
+        # set initial population count
         self.current_population = 0
 
         # initialise ranking probabilities
@@ -560,14 +579,21 @@ class DesignEvolver:
         jobs = build_messages(filenames, population_image_fileapath, self.prompt)
 
         # rank images using LLM
-        results = self.processor.process_batch_chunked(jobs, chunk_size=32)
+        if self.ranking_method == "simple":
+            
+            # TODO: update to run on the same method as glicko scores
+            results = self.processor.process_batch_chunked(jobs, chunk_size=32)
 
-        # calculate ranks
-        ranks = calc_ranks(results, len(filenames))
-        sorted_idx = np.argsort(ranks)[::-1]
-        sorted_ranks = ranks[sorted_idx]
+            # calculate ranks
+            ranks = calc_ranks(results, len(filenames))
+            sorted_idx = np.argsort(ranks)[::-1]
+
+        elif self.ranking_method == "glicko":
+            
+            sorted_idx, ranks = self._process_batch_chunked(jobs, chunk_size=32)
 
         self.population_params = [self.population_params[i] for i in sorted_idx]
+        sorted_ranks = ranks[sorted_idx]
 
         # set parameter scores
         for i in range(len(sorted_ranks)):
@@ -575,7 +601,7 @@ class DesignEvolver:
 
         # plot images
         if plot:
-            self._plot_population(ranks=ranks[sorted_idx], image_name=f'Population {self.current_population} Rankings')
+            self._plot_population(ranks=sorted_ranks, image_name=f'Population {self.current_population} Rankings')
 
     
     def evolve_population(self) -> None:
@@ -620,6 +646,124 @@ class DesignEvolver:
             child.mutate(self.mutation_rate)
         
         self.population_params = children
+
+    @staticmethod
+    def read_param_spec(spec_filepath: str) -> dict:
+        """
+        Method reads parameter specification from a YAML file.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param spec_filepath: Filepath to the YAML specification file.
+        :type spec_filepath: str
+
+        :return: Parameter specification as a dictionary.
+        :rtype: dict
+        """
+
+        # Use a context manager to open and automatically close the file
+        with open(spec_filepath, 'r') as file:
+            # Use safe_load to safely parse the YAML content
+            configuration = yaml.safe_load(file)
+        
+        return configuration
+
+    @staticmethod
+    def generate_initial_params(population_size: int, 
+                                 param_spec: dict, 
+                                 experiment_name: str, 
+                                 mutation_sigma: float) -> List[Params]:
+        """
+        Static method generates inital random parameters for sample.
+        @author: Stephen Krol
+        @date: Jan 2026
+        
+        :param population_size: Number of individuals in the population.
+        :type population_size: int
+        :param param_spec: Parameter specification dictionary.
+        :type param_spec: dict
+        :param experiment_name: Name of the experiment.
+        :type experiment_name: str
+        :param mutation_sigma: Mutation sigma value.
+        :type mutation_sigma: float
+
+        :return: List of generated random Params objects.
+        :rtype: List[Params]
+        """
+
+        param_list = []
+
+        for i in range(population_size):
+
+            params = {}
+
+            # sample params using ranges from config
+            for param in param_spec:
+                param_config = param_spec[param]
+                if param_config["calc"] == True:
+                    continue
+                elif param_config["type"] == "categorical":
+                    params[param] = random.choice(param_config["values"])
+                    continue
+                elif param_config["type"] == "int":
+                    sample = random.randint
+                else:
+                    sample = random.uniform
+
+                params[param] = sample(param_config["min"], param_config["max"])
+
+            # calculate remaining params
+            params["dt"] = 1.0 / (params["fb"] * max(params["frx"], params["fry"] * params["sampleRate"]))
+
+            # spaceP
+            params["spaceP"] = 10**params["spaceD"]
+        
+            filename = f"run0_{i}"
+            param_list.append(Params(params, param_spec, experiment_name, filename, mutation_sigma))
+        
+        return param_list
+    
+    def _process_batch_chunked(self, jobs: List[ComparisonJob], chunk_size: int = 8) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Docstring for process_batch_chunked. Process a large batch of comparison jobs in smaller chunks to avoid OOM.
+        @author: sjkrol
+
+        :param jobs: List of ComparisonJob Objects
+        :type jobs: List[ComparisonJob]
+        :param chunk_size: Max size of each batch chunk
+        :type chunk_size: int
+
+        :return: Tuple containing an array of sorted indices based on Glicko ratings and an array of ranks
+        :rtype: Tuple[np.ndarray, np.ndarray]
+        """
+        all_results = []
+        total_jobs = len(jobs)
+
+        # shuffle jobs to ensure random distribution of comparisons across chunks, which might help with more stable Glicko score updates
+        random.shuffle(jobs)
+        
+        print(f"Processing {total_jobs} jobs in chunks of {chunk_size}...")
+        
+        for i in tqdm(range(0, total_jobs, chunk_size)):
+            chunk = jobs[i:i + chunk_size]
+            
+            chunk_results = self.processor.process_batch_parallel(chunk)
+            all_results.extend(chunk_results)
+
+            # TODO: experiment with updating after each individual game
+            # currently updates glicko score after each chunk, no garuntee on the number of comparisons each image is involved in per chunk, which might lead to some instability in score updates. 
+            # Glick recommends 5-10 comparisons per rating period, so we could experiment with different chunk sizes to see how it affects the stability of the ratings and ultimately the evolution process. 
+            # We could also consider updating ratings after each individual comparison, but that might be more computationally expensive.
+            update_glicko_scores(self.population_params, chunk_results)
+
+            
+            # Clear GPU cache between chunks
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            ranks = np.array([param.rating for param in self.population_params])
+
+        return np.argsort(ranks)[::-1], ranks
 
 
     def _plot_population(self,
@@ -682,71 +826,6 @@ class DesignEvolver:
 
         # Probability of r-th item being the highest ranked in radomly selected k items
         return (1 - (r - 1) / N) ** k - (1 - r / N) ** k 
-
-    def _read_param_spec(self, spec_filepath: str) -> dict:
-        """
-        Method reads parameter specification from a YAML file.
-        @author: Stephen Krol
-        @date: Jan 2026
-        
-        :param self: Current instance of the class.
-        :param spec_filepath: Filepath to the YAML specification file.
-        :type spec_filepath: str
-
-        :return: Parameter specification as a dictionary.
-        :rtype: dict
-        """
-
-        # Use a context manager to open and automatically close the file
-        with open(spec_filepath, 'r') as file:
-            # Use safe_load to safely parse the YAML content
-            configuration = yaml.safe_load(file)
-        
-        return configuration
-    
-    def _generate_initial_params(self) -> List[Params]:
-        """
-        Method generates inital random parameters for sample.
-        @author: Stephen Krol
-        @date: Jan 2026
-        
-        :param self: Current instance of the class.
-
-        :return: List of generated random Params objects.
-        :rtype: List[Params]
-        """
-
-        param_list = []
-
-        for i in range(self.population_size):
-
-            params = {}
-
-            # sample params using ranges from config
-            for param in self.param_spec:
-                param_config = self.param_spec[param]
-                if param_config["calc"] == True:
-                    continue
-                elif param_config["type"] == "categorical":
-                    params[param] = random.choice(param_config["values"])
-                    continue
-                elif param_config["type"] == "int":
-                    sample = random.randint
-                else:
-                    sample = random.uniform
-
-                params[param] = sample(param_config["min"], param_config["max"])
-
-            # calculate remaining params
-            params["dt"] = 1.0 / (params["fb"] * max(params["frx"], params["fry"] * params["sampleRate"]))
-
-            # spaceP
-            params["spaceP"] = 10**params["spaceD"]
-        
-            filename = f"run0_{i}"
-            param_list.append(Params(params, self.param_spec, self.experiment_name, filename, self.mutation_sigma))
-        
-        return param_list
     
     def _calculate_alpha(self, score1: float, score2: float) -> float:
         """
@@ -782,6 +861,7 @@ def aesthetic_evolution(experiment_name: str,
                         mutation_rate: float,
                         mutation_sigma: float,
                         k: float,
+                        ranking_method: str = "glicko",
                         population_size: int = 20,
                         processing: str = "serial",
                         screen: bool = False,
@@ -813,6 +893,8 @@ def aesthetic_evolution(experiment_name: str,
     :type mutation_sigma: float
     :param k: Tournament size for selection as a percentage of the population.
     :type k: float
+    :param ranking_method: Method for ranking designs ("glicko" or "simple").
+    :type ranking_method: str
     :param processing: Processing mode, either "serial" or "parallel".
     :type processing: str
     :param screen: Whether to display the screen during processing.
@@ -847,6 +929,7 @@ def aesthetic_evolution(experiment_name: str,
         alpha=alpha,
         mutation_rate=mutation_rate,
         mutation_sigma=mutation_sigma,
+        ranking_method=ranking_method,
         plot_pop=True
     )
 

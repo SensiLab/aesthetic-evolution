@@ -54,6 +54,10 @@ assert 0 <= mutation_rate <= 1, "Mutation rate must be between 0 and 1."
 mutation_sigma = evo_config.get("mutation_sigma", 0.1)
 assert mutation_sigma > 0, "Mutation sigma must be positive."
 
+# check ranking method
+ranking_method = evo_config.get('ranking_method', None)
+assert ranking_method in ['glicko', 'simple'], f"Ranking method must be either 'glicko' or 'simple', but got '{ranking_method}'."
+
 
 ##### START EXPERIMENT #####
 
@@ -73,6 +77,7 @@ aesthetic_evolution(
     mutation_rate=mutation_rate,
     mutation_sigma=mutation_sigma,
     k=evo_config["k"],
+    ranking_method=ranking_method,
     population_size=evo_config["population_size"],
     processing=job_config["processing"],
     screen=job_config.get('screen', False),

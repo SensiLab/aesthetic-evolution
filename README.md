@@ -1,6 +1,6 @@
 # Aesthetic Evolution
 
-An aesthetic evolution system that uses genetic algorithms to evolve generative art designs. The system generates visual designs via Processing sketches, ranks them using the Qwen3-VL vision language model, and evolves parameters through tournament selection, crossover, and mutation.
+An aesthetic evolution system that uses genetic algorithms to evolve generative art designs. The system generates visual designs via Processing sketches, ranks them using the Qwen3-VL vision language model with Glicko-2 rating system, and evolves parameters through tournament selection, crossover, and mutation.
 
 ## Project Overview
 
@@ -18,7 +18,8 @@ The system supports both serial and parallel design generation, headless renderi
 ### Key Features
 
 - **Genetic Algorithm**: Tournament selection, arithmetic mean crossover, and Gaussian mutation
-- **Vision-based Ranking**: Automated aesthetic evaluation using Qwen3-VL-8B-Instruct
+- **Glicko Rating System**: Probabilistic ranking using Glicko-2 algorithm for robust aesthetic evaluation
+- **Vision-based Ranking**: Automated aesthetic evaluation using Qwen3-VL-8B-Instruct with pairwise comparisons
 - **Flexible Parameters**: YAML-based parameter specification with int, float, and categorical types
 - **Parallel Processing**: Multi-worker design generation and chunked GPU batch inference
 - **Headless Rendering**: Support for server environments without displays
@@ -77,10 +78,11 @@ This project requires **CUDA 12.8**. The dependencies include:
 
 ### Three Main Classes
 
-#### 1. `Params` Class
-**Purpose**: Genotype storage and genetic operations
+#### 1. `Params` Class (inherits from `Player`)
+**Purpose**: Genotype storage, genetic operations, and Glicko rating tracking
 
 **Key Responsibilities**:
+- Inherit from `Player` class to store Glicko rating and rating deviation (RD)
 - Store parameter dictionaries with type-aware categorization (int, float, categorical)
 - Handle breeding via arithmetic mean crossover with configurable alpha weighting
 - Implement Gaussian mutation (σ=0.1) on normalized parameter space
@@ -117,20 +119,22 @@ This project requires **CUDA 12.8**. The dependencies include:
 
 **Key Responsibilities**:
 - Initialize random population parameters from `param_spec.yaml`
-- Coordinate LLM batch evaluation via `Qwen3VLBatchProcessor`
-- Implement tournament selection with rank-based probability sampling
+- Coordinate LLM batch evaluation via `Qwen3VLBatchProcessor`- Update Glicko ratings based on pairwise comparison outcomes- Implement tournament selection with rank-based probability sampling
 - Orchestrate breeding and mutation to create next generation
 - Track population state across generations
 
 **Key Methods**:
 - `_generate_initial_params()`: Creates random initial population respecting parameter ranges
-- `evaluate_population(plot)`: Builds pairwise comparison jobs, processes via LLM, calculates tournament ranks
-- `evolve_population(generator, plot)`: Samples parents by rank probability, breeds children, applies mutation, generates new designs
+- `evaluate_population(plot)`: Builds pairwise comparison jobs, processes via LLM, updates Glicko ratings incrementally
+- `_process_batch_chunked(jobs, chunk_size)`: Processes comparisons in chunks, updates Glicko scores after each chunk
+- `evolve_population(generator, plot)`: Samples parents by Glicko rating probability, breeds children, applies mutation, generates new designs
 - `_calc_ranking_probabilities(n, k)`: Computes selection probabilities based on tournament size k
 
 **LLM Integration**:
 - Uses `Qwen3VLBatchProcessor` with chunked batch inference (default chunk_size=32)
-- Processes all-pairs pairwise comparisons to generate tournament rankings
+- Processes pairwise comparisons and updates Glicko ratings incrementally after each chunk
+- Each design starts with rating=1500, deviation=350 (standard Glicko initialization)
+- Ratings converge as more comparisons are processed, with uncertainty (RD) decreasing over time
 - Expects LLM to output only "1" or "2" for each comparison
 
 ### Generation Workflow in `run.py`
@@ -163,14 +167,16 @@ The `run.py` script orchestrates the complete evolutionary pipeline. It loads co
    **Step A - Evaluation**:
    - Build all-pairs pairwise comparison jobs (N×(N-1)/2 comparisons for population size N)
    - Process comparisons in GPU batches using Qwen3-VL
-   - Aggregate pairwise wins into tournament rankings
-   - Sort population by rank (best to worst)
+   - Update Glicko ratings incrementally after each chunk (or after all comparisons for simple ranking)
+   - Ratings reflect both wins/losses and uncertainty (rating deviation)
+   - Sort population by Glicko rating (best to worst)
    - Plot ranked image grid
 
    **Step B - Evolution**:
-   - Sample parent pairs using rank-based probability (higher rank → higher selection chance)
-   - Breed offspring via arithmetic mean crossover (α=0.5)
+   - Sample parent pairs using Glicko rating-based probability (higher rating → higher selection chance)
+   - Breed offspring via arithmetic mean crossover (α determined by `alpha_mode`)
    - Apply mutation to offspring parameters
+   - Reset offspring Glicko ratings to initial values (1500 rating, 350 RD)
    - Increment generation counter
    - Generate new population via `generator.generate_population()`
 
@@ -209,12 +215,17 @@ evo:
   mutation_rate: 0.1          # Probability of each parameter mutating
   mutation_sigma: 0.1         # Standard deviation for Gaussian mutation
   k: 0.25                     # Percentage of population in tournament selection
+  ranking_method: "glicko"    # Ranking method: "glicko" or "simple"
 ```
 
 **Alpha Mode Options**:
 - `"fixed"`: Uses the specified `alpha` value for all crossovers
 - `"random"`: Randomly samples alpha for each crossover
 - `"biased"`: Biases alpha toward higher-ranked parent
+
+**Ranking Method Options**:
+- `"glicko"` (recommended): Uses Glicko-1 rating system with incremental updates, accounts for rating uncertainty
+- `"simple"`: Uses basic win/loss counting from pairwise comparisons
 
 **LLM Prompt File**:
 
