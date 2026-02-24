@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Experiment {{ experiment_name }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    img { max-width: 100%; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 8px; }
+    .plots { display: grid; grid-template-columns: repeat(2, minmax(320px, 1fr)); gap: 12px; }
+    .items { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 10px; }
+    .item { font-size: 12px; }
+    select { padding: 6px; }
+  </style>
+</head>
+<body>
+  <p><a href="/">← Back</a></p>
+  <div class="card">
+    <h2>Experiment: {{ experiment_name }}</h2>
+    <form method="get">
+      <label>Select run:</label>
+      <select name="run" onchange="this.form.submit()">
+        {% for run in runs %}
+          <option value="{{ run }}" {% if run == selected_run %}selected{% endif %}>{{ run }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Ranking & Generation Plots ({{ selected_run }})</h3>
+    <div class="plots">
+      {% for name in artifacts.plot_files %}
+        <div>
+          <p>{{ name }}</p>
+          <img src="/artifacts/{{ experiment_name }}/{{ selected_run }}/Images/{{ name }}" alt="{{ name }}" />
+        </div>
+      {% else %}
+        <p>No plot images found for this run.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Design Images ({{ selected_run }})</h3>
+    <div class="items">
+      {% for name in artifacts.design_files %}
+        <div class="item">
+          <a href="/artifacts/{{ experiment_name }}/{{ selected_run }}/Images/{{ name }}" target="_blank">{{ name }}</a>
+        </div>
+      {% else %}
+        <p>No design images found.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Parameter Files ({{ selected_run }})</h3>
+    <div class="items">
+      {% for name in artifacts.param_files %}
+        <div class="item">
+          <a href="/artifacts/{{ experiment_name }}/{{ selected_run }}/Params/{{ name }}" target="_blank">{{ name }}</a>
+        </div>
+      {% else %}
+        <p>No parameter files found.</p>
+      {% endfor %}
+    </div>
+  </div>
+</body>
+</html>
