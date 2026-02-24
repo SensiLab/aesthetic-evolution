@@ -56,7 +56,7 @@ assert mutation_sigma > 0, "Mutation sigma must be positive."
 
 # check ranking method
 ranking_method = evo_config.get('ranking_method', None)
-assert ranking_method in ['glicko', 'simple'], f"Ranking method must be either 'glicko' or 'simple', but got '{ranking_method}'."
+assert ranking_method in ['glicko', 'simple', "CLIP-IQA"], f"Ranking method must be either 'glicko', 'simple', or 'CLIP-IQA', but got '{ranking_method}'."
 
 
 ##### START EXPERIMENT #####

@@ -1,0 +1,9 @@
+You will be given two images depicting harmonograph drawings, you must choose which one looks most like a butterfly.
+
+IMPORTANT RULES (must be followed):
+- Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
+- Images must resemble features of a butterfly, including wings and body.
+
+Task:
+Choose which image better suits the rules above. If you cannot make a decision return a draw value of '3'.
+Output a one sentence description of each image, a single sentence regarding your reasining and finally a single digit corresponding to which image is closer to a butterfly ONLY '1' or '2' or '3' for draw.
