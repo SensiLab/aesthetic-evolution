@@ -18,8 +18,11 @@ The system supports both serial and parallel design generation, headless renderi
 ### Key Features
 
 - **Genetic Algorithm**: Tournament selection, arithmetic mean crossover, and Gaussian mutation
-- **Glicko Rating System**: Probabilistic ranking using Glicko-2 algorithm for robust aesthetic evaluation
-- **Vision-based Ranking**: Automated aesthetic evaluation using Qwen3-VL-8B-Instruct with pairwise comparisons
+- **Multiple Ranking Systems**: 
+  - **Glicko-2**: Probabilistic ranking using Glicko-2 algorithm for robust pairwise comparison evaluation
+  - **CLIP-IQA**: Vision-language model-based quality assessment without pairwise comparisons
+  - **Simple**: Basic win/loss counting from pairwise comparisons
+- **Vision-based Ranking**: Automated aesthetic evaluation using Qwen3-VL-8B-Instruct with pairwise comparisons (for Glicko/Simple) or CLIP for direct quality scoring (CLIP-IQA)
 - **Flexible Parameters**: YAML-based parameter specification with int, float, and categorical types
 - **Parallel Processing**: Multi-worker design generation and chunked GPU batch inference
 - **Headless Rendering**: Support for server environments without displays
@@ -130,12 +133,23 @@ This project requires **CUDA 12.8**. The dependencies include:
 - `evolve_population(generator, plot)`: Samples parents by Glicko rating probability, breeds children, applies mutation, generates new designs
 - `_calc_ranking_probabilities(n, k)`: Computes selection probabilities based on tournament size k
 
-**LLM Integration**:
+**Ranking Systems**:
+
+*For Glicko and Simple methods:*
 - Uses `Qwen3VLBatchProcessor` with chunked batch inference (default chunk_size=32)
-- Processes pairwise comparisons and updates Glicko ratings incrementally after each chunk
-- Each design starts with rating=1500, deviation=350 (standard Glicko initialization)
-- Ratings converge as more comparisons are processed, with uncertainty (RD) decreasing over time
+- Processes pairwise comparisons:
+  - **Glicko**: Updates ratings incrementally after each chunk; each design starts with rating=1500, deviation=350
+  - **Simple**: Counts wins/losses from all pairwise comparisons
+- Ratings converge as more comparisons are processed (Glicko only), with uncertainty (RD) decreasing over time
 - Expects LLM to output only "1" or "2" for each comparison
+
+*For CLIP-IQA method:*
+- Uses OpenCLIP (RN50) for direct image quality assessment
+- No pairwise comparisons needed - evaluates each image independently
+- Compares image features against "Good Design" vs "Bad Design" text prompts
+- Returns probability scores: P(good) and P(bad) for each image
+- Based on [Exploring CLIP for Assessing the Look and Feel of Images](https://arxiv.org/abs/2207.12396)
+- Significantly faster than pairwise methods (O(N) vs O(N²) comparisons)
 
 ### Generation Workflow in `run.py`
 
@@ -165,11 +179,20 @@ The `run.py` script orchestrates the complete evolutionary pipeline. It loads co
    ```
 
    **Step A - Evaluation**:
+   
+   *For Glicko/Simple methods:*
    - Build all-pairs pairwise comparison jobs (N×(N-1)/2 comparisons for population size N)
    - Process comparisons in GPU batches using Qwen3-VL
-   - Update Glicko ratings incrementally after each chunk (or after all comparisons for simple ranking)
-   - Ratings reflect both wins/losses and uncertainty (rating deviation)
-   - Sort population by Glicko rating (best to worst)
+   - Update Glicko ratings incrementally after each chunk (or count wins/losses for simple ranking)
+   - Ratings reflect both wins/losses and uncertainty (rating deviation) for Glicko
+   - Sort population by rating/score (best to worst)
+   
+   *For CLIP-IQA method:*
+   - Load all images and compute CLIP embeddings
+   - Compare against positive ("Good Design") and negative ("Bad Design") text prompts
+   - Rank by P(good) probability score
+   - Much faster: O(N) evaluations vs O(N²) pairwise comparisons
+   
    - Plot ranked image grid
 
    **Step B - Evolution**:
@@ -215,8 +238,10 @@ evo:
   mutation_rate: 0.1          # Probability of each parameter mutating
   mutation_sigma: 0.1         # Standard deviation for Gaussian mutation
   k: 0.25                     # Percentage of population in tournament selection
-  ranking_method: "glicko"    # Ranking method: "glicko" or "simple"
+  ranking_method: "glicko"    # Ranking method: "glicko", "CLIP-IQA", or "simple"
 ```
+
+**Note**: When using `ranking_method: "CLIP-IQA"`, the system uses OpenCLIP RN50 for direct quality assessment instead of LLM-based pairwise comparisons. This is significantly faster (O(N) vs O(N²)) but evaluates images independently rather than through comparative ranking.
 
 **Alpha Mode Options**:
 - `"fixed"`: Uses the specified `alpha` value for all crossovers
@@ -224,7 +249,8 @@ evo:
 - `"biased"`: Biases alpha toward higher-ranked parent
 
 **Ranking Method Options**:
-- `"glicko"` (recommended): Uses Glicko-1 rating system with incremental updates, accounts for rating uncertainty
+- `"glicko"` (recommended for robust ranking): Uses Glicko-2 rating system with incremental updates, accounts for rating uncertainty via pairwise comparisons
+- `"CLIP-IQA"` (recommended for speed): Uses CLIP vision-language model to directly score image quality without pairwise comparisons; based on [CLIP-IQA paper](https://arxiv.org/abs/2207.12396)
 - `"simple"`: Uses basic win/loss counting from pairwise comparisons
 
 **LLM Prompt File**:
@@ -317,20 +343,22 @@ These are automatically derived and excluded from mutation/crossover.
 
 Key packages:
 - `torch==2.7.0+cu128`: PyTorch with CUDA 12.8
-- `transformers`: HuggingFace Transformers for Qwen3-VL
-- `flash-attn==2.7.4`: Flash Attention 2 for memory-efficient inference
-- `qwen-vl-utils`: Vision-language model utilities
+- `transformers`: HuggingFace Transformers for Qwen3-VL (for Glicko/Simple ranking)
+- `flash-attn==2.7.4`: Flash Attention 2 for memory-efficient inference (for Glicko/Simple ranking)
+- `qwen-vl-utils`: Vision-language model utilities (for Glicko/Simple ranking)
+- `open_clip_torch`: OpenCLIP for CLIP-IQA ranking method
 - `numpy`, `tqdm`, `pyyaml`: Standard scientific Python stack
 
 See [requirements.txt](requirements.txt) for complete list.
 
 ## Performance Notes
 
-- **GPU Memory**: Default chunk_size=32 for batch processing; reduce if OOM occurs
+- **GPU Memory**: Default chunk_size=32 for batch processing; reduce if OOM occurs (applies to Glicko/Simple methods)
 - **Generation Time**: Parallel mode significantly faster; adjust `workers` based on CPU cores
 - **Timeout**: 20s limit per design render to prevent hangs; may need adjustment for complex sketches
-- **Selection Pressure**: Tournament parameter `k` (as percentage) controls selection pressure; higher k = more elitism
+- **Selection Pressure**: Tournament parameter `k` (as percentage) controls selection pressure; lower k = more elitism
 - **Mutation**: `mutation_rate` controls per-parameter mutation probability; `mutation_sigma` controls magnitude
+- **Ranking Speed**: CLIP-IQA is ~100x faster than pairwise methods for large populations (O(N) vs O(N²) comparisons)
 
 ## Extending
 

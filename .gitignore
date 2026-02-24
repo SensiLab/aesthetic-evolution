@@ -5,6 +5,7 @@ curl_noise_03/
 qwen3_system_prompt_jon.ipynb
 Designs/
 *.png
+*.jpg
 Experiments
 *.json
 probability_simulation.py

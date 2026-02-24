@@ -15,6 +15,7 @@ from aesthetic_evolution.utils import build_messages, calc_ranks, plot_image_gri
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from aesthetic_evolution.process_batch import Qwen3VLBatchProcessor, ComparisonJob
 from aesthetic_evolution.glicko import Player, Q, MIN_DEVIATION
+from aesthetic_evolution.CLIP_IQA import CLIP_IQA
 from typing import List, Tuple
 from tqdm import tqdm
 
@@ -492,7 +493,7 @@ class DesignEvolver:
         :type k: int
         :param alpha_mode: Method for selecting alpha during crossover ("random", "fixed", "biased").
         :type alpha_mode: str
-        :param ranking_method: Method for ranking designs ("glicko" or "simple").
+        :param ranking_method: Method for ranking designs ("glicko", "simple", or "CLIP-IQA").
         :type ranking_method: str
         :param alpha: Fixed alpha value if alpha_mode is "fixed" between 0 and 1.
         :type alpha: float
@@ -524,7 +525,7 @@ class DesignEvolver:
         self.alpha = alpha
 
         # set ranking mode
-        assert ranking_method in ["glicko", "simple"], "Ranking method must be 'glicko' or 'simple'"
+        assert ranking_method in ["glicko", "simple", "CLIP-IQA"], "Ranking method must be 'glicko', 'simple', or 'CLIP-IQA'"
         self.ranking_method = ranking_method
 
 
@@ -532,10 +533,13 @@ class DesignEvolver:
         self.prompt = prompt
 
         # initialise processor
-        self.processor = Qwen3VLBatchProcessor(
-                model_name="Qwen/Qwen3-VL-7B-Instruct",
-                device="cuda" if torch.cuda.is_available() else "cpu"
-                )
+        if ranking_method == "CLIP-IQA":
+            self.processor = CLIP_IQA()
+        else:
+            self.processor = Qwen3VLBatchProcessor(
+                    model_name="Qwen/Qwen3-VL-7B-Instruct",
+                    device="cuda" if torch.cuda.is_available() else "cpu"
+                    )
 
         # set plot population boolean
         self.plot_pop = plot_pop
@@ -591,6 +595,18 @@ class DesignEvolver:
         elif self.ranking_method == "glicko":
             
             sorted_idx, ranks = self._process_batch_chunked(jobs, chunk_size=32)
+
+        elif self.ranking_method == "CLIP-IQA":
+
+            image_paths = [f"{population_image_fileapath}/{filename}" for filename in filenames]
+            scores = self.processor.compute_clip_iqa_score(
+                image_path=image_paths,
+                positive_prompt="Good Design",
+                negative_prompt="Bad Design"
+            )
+
+            sorted_idx = sorted(range(len(scores)), key=lambda i: scores[i][0], reverse=True)
+            ranks = np.array([score[0] for score in scores])
 
         self.population_params = [self.population_params[i] for i in sorted_idx]
         sorted_ranks = ranks[sorted_idx]

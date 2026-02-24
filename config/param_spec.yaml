@@ -10,7 +10,7 @@ sampleRate:
   calc: false
 ab:
   type: int
-  min: 0
+  min: 50
   max: 200
   # max: 500 # original
   calc: false

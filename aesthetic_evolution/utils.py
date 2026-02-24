@@ -215,7 +215,7 @@ def plot_image_grid(filenames: list,
             img = plt.imread(os.path.join(filepath, filenames[idx]))
             ax[i, j].imshow(img)
             if ranks is not None:
-                ax[i, j].set_title(f"{filenames[idx].split('_')[-1].strip('.png')} : {round(ranks[idx])}")
+                ax[i, j].set_title(f"{filenames[idx].split('_')[-1].strip('.png')} : {round(ranks[idx], 2)}")
             else:
                 ax[i, j].set_title(filenames[idx].split('_')[-1].strip('.png'))
             ax[i, j].axis('off')
