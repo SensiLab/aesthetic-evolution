@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aesthetic Evolution Web UI</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    h1, h2 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; }
+    .row { display: flex; flex-direction: column; }
+    label { font-size: 13px; margin-bottom: 4px; }
+    input, select, textarea { padding: 8px; font-size: 14px; }
+    textarea { min-height: 80px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .checkbox { display: flex; align-items: center; gap: 8px; }
+    button { padding: 10px 16px; font-size: 14px; }
+    ul { margin-top: 8px; }
+    .muted { color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Aesthetic Evolution Jobs</h1>
+
+  <div class="card">
+    <h2>Run New Job</h2>
+    <form method="post" action="/jobs">
+      <div class="grid">
+        <div class="row"><label>Experiment Name</label><input name="experiment_name" required /></div>
+        <div class="row"><label>Runs</label><input name="runs" type="number" value="{{ defaults.runs }}" required /></div>
+        <div class="row"><label>Population Size (even)</label><input name="population_size" type="number" value="{{ defaults.population_size }}" required /></div>
+
+        <div class="row"><label>Param Spec File</label><input name="param_spec_file" value="{{ defaults.param_spec_file }}" required /></div>
+        <div class="row"><label>Sketch Directory</label><input name="sketch_dir" value="{{ defaults.sketch_dir }}" required /></div>
+        <div class="row"><label>Prompt Filepath</label><input name="prompt_filepath" value="{{ defaults.prompt_filepath }}" /></div>
+
+        <div class="row"><label>Prompt Text (optional override)</label><textarea name="prompt_text"></textarea></div>
+        <div class="row"><label>Processing</label>
+          <select name="processing">
+            <option value="serial" {% if defaults.processing == 'serial' %}selected{% endif %}>serial</option>
+            <option value="parallel" {% if defaults.processing == 'parallel' %}selected{% endif %}>parallel</option>
+          </select>
+        </div>
+        <div class="row"><label>Workers</label><input name="workers" type="number" value="{{ defaults.workers }}" required /></div>
+
+        <div class="row"><label>Alpha Mode</label>
+          <select name="alpha_mode">
+            <option value="random">random</option>
+            <option value="fixed">fixed</option>
+            <option value="biased">biased</option>
+          </select>
+        </div>
+        <div class="row"><label>Alpha (for fixed mode)</label><input name="alpha" type="number" step="0.01" value="{{ defaults.alpha }}" /></div>
+        <div class="row"><label>Tournament k ratio (0..1)</label><input name="k" type="number" step="0.01" value="{{ defaults.k }}" required /></div>
+
+        <div class="row"><label>Mutation Rate</label><input name="mutation_rate" type="number" step="0.01" value="{{ defaults.mutation_rate }}" required /></div>
+        <div class="row"><label>Mutation Sigma</label><input name="mutation_sigma" type="number" step="0.01" value="{{ defaults.mutation_sigma }}" required /></div>
+        <div class="row"><label>Ranking Method</label>
+          <select name="ranking_method">
+            <option value="glicko">glicko</option>
+            <option value="simple">simple</option>
+            <option value="CLIP-IQA">CLIP-IQA</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top: 12px; grid-template-columns: repeat(4, minmax(180px, 1fr));">
+        <label class="checkbox"><input type="checkbox" name="screen" /> Screen</label>
+        <label class="checkbox"><input type="checkbox" name="parents_compete" /> Parents Compete</label>
+        <div class="row"><label>Competing Parents Rate</label><input name="competing_parents_rate" type="number" step="0.01" value="{{ defaults.competing_parents_rate }}" /></div>
+        <label class="checkbox"><input type="checkbox" name="overwrite" /> Overwrite Existing Experiment</label>
+      </div>
+
+      <p class="muted">No existing project files are modified; this UI executes evolution in-process using the same core functions.</p>
+      <button type="submit">Submit Job</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Recent Jobs</h2>
+    <ul>
+      {% for job in jobs %}
+        <li><a href="/jobs/{{ job.job_id }}">{{ job.job_id }}</a> — {{ job.status }} — {{ job.config.job.experiment_name }}</li>
+      {% else %}
+        <li>No jobs submitted yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Experiments</h2>
+    <ul>
+      {% for name in experiments %}
+        <li><a href="/experiments/{{ name }}">{{ name }}</a></li>
+      {% else %}
+        <li>No experiment directories found.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</body>
+</html>

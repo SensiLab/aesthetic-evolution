@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job {{ job.job_id }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    pre { background: #111; color: #eee; padding: 12px; border-radius: 6px; max-height: 500px; overflow: auto; }
+    a { text-decoration: none; }
+  </style>
+</head>
+<body>
+  <p><a href="/">← Back</a></p>
+  <div class="card">
+    <h2>Job {{ job.job_id }}</h2>
+    <p><strong>Status:</strong> <span id="status">{{ job.status }}</span></p>
+    <p><strong>Experiment:</strong> {{ job.config.job.experiment_name }}</p>
+    <p><strong>Created:</strong> {{ job.created_at }}</p>
+    <p><strong>Started:</strong> <span id="started">{{ job.started_at }}</span></p>
+    <p><strong>Finished:</strong> <span id="finished">{{ job.finished_at }}</span></p>
+    <p><strong>Error:</strong> <span id="error">{{ job.error }}</span></p>
+    <p><a id="exp-link" href="/experiments/{{ job.config.job.experiment_name }}">Open Experiment</a></p>
+  </div>
+
+  <div class="card">
+    <h3>Live Log</h3>
+    <pre id="log"></pre>
+  </div>
+
+  <script>
+    const jobId = "{{ job.job_id }}";
+    async function refresh() {
+      const statusResp = await fetch(`/api/jobs/${jobId}`);
+      if (statusResp.ok) {
+        const data = await statusResp.json();
+        document.getElementById("status").textContent = data.status;
+        document.getElementById("started").textContent = data.started_at || "";
+        document.getElementById("finished").textContent = data.finished_at || "";
+        document.getElementById("error").textContent = data.error || "";
+      }
+
+      const logResp = await fetch(`/api/jobs/${jobId}/log`);
+      if (logResp.ok) {
+        const logData = await logResp.json();
+        document.getElementById("log").textContent = logData.log || "";
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 3000);
+  </script>
+</body>
+</html>

@@ -24,7 +24,7 @@ experiment_name = job_config['experiment_name']
 if os.path.exists(os.path.join("Experiments", experiment_name)):
     response = input(f"Experiment '{experiment_name}' already exists. Do you want to overwrite it? (y/n): ")
     if response.lower() != 'y':
-        print("Exiting without overwriting. Please choose a different experiment name.")
+        print("\nExiting without overwriting. Please choose a different experiment name.")
         exit(0)
 
 # load prompt from file if specified
@@ -54,6 +54,14 @@ assert 0 <= mutation_rate <= 1, "Mutation rate must be between 0 and 1."
 mutation_sigma = evo_config.get("mutation_sigma", 0.1)
 assert mutation_sigma > 0, "Mutation sigma must be positive."
 
+# retrieve and check competing parents parameters
+parents_compete = evo_config.get("parents_compete", None)
+competing_parents_rate = evo_config.get("competing_parents_rate", None)
+assert parents_compete is not None, "Parents compete parameter must be specified in evolution configuration."
+if parents_compete:
+    assert competing_parents_rate is not None, "Competing parents rate must be specified if parents compete is True."
+    assert 0 <= competing_parents_rate <= 1, "Competing parents rate must be between 0 and 1."
+
 # check ranking method
 ranking_method = evo_config.get('ranking_method', None)
 assert ranking_method in ['glicko', 'simple', "CLIP-IQA"], f"Ranking method must be either 'glicko', 'simple', or 'CLIP-IQA', but got '{ranking_method}'."
@@ -81,7 +89,9 @@ aesthetic_evolution(
     population_size=evo_config["population_size"],
     processing=job_config["processing"],
     screen=job_config.get('screen', False),
-    workers=job_config.get('workers', 8)
+    workers=job_config.get('workers', 8),
+    parents_compete=parents_compete,
+    competing_parents_rate=competing_parents_rate
 )
 
 # save configuration to experiment directory

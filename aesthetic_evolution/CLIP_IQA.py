@@ -13,7 +13,8 @@ class CLIP_IQA:
     def __init__( 
         self,
         model_name: str = "RN50",
-        pretrained_tag: str = "openai") -> None:
+        pretrained_tag: str = "openai",
+        quick_gelu: bool = True) -> None:
 
 
         self.model_name = model_name
@@ -24,6 +25,8 @@ class CLIP_IQA:
             self.model_name,
             pretrained=self.pretrained_tag,
             device=self.device,
+            quick_gelu=quick_gelu,
+
         )
         self.model = self.remove_vision_positional_encoding(self.model)
         self.model.eval()

@@ -18,6 +18,7 @@ The system supports both serial and parallel design generation, headless renderi
 ### Key Features
 
 - **Genetic Algorithm**: Tournament selection, arithmetic mean crossover, and Gaussian mutation
+- **Parent Elitism Option**: Optionally retain top-ranked parents in the next generation using `parents_compete` and `competing_parents_rate`
 - **Multiple Ranking Systems**: 
   - **Glicko-2**: Probabilistic ranking using Glicko-2 algorithm for robust pairwise comparison evaluation
   - **CLIP-IQA**: Vision-language model-based quality assessment without pairwise comparisons
@@ -26,6 +27,7 @@ The system supports both serial and parallel design generation, headless renderi
 - **Flexible Parameters**: YAML-based parameter specification with int, float, and categorical types
 - **Parallel Processing**: Multi-worker design generation and chunked GPU batch inference
 - **Headless Rendering**: Support for server environments without displays
+- **Web Interface (Additive)**: Browser UI for job submission, live logs, and generation/result browsing without changing `run.py`
 
 ## Installation and Setup
 
@@ -196,6 +198,8 @@ The `run.py` script orchestrates the complete evolutionary pipeline. It loads co
    - Plot ranked image grid
 
    **Step B - Evolution**:
+   - Optionally retain top-ranked parents unchanged in next generation (`parents_compete=True`)
+   - Number retained = `int(competing_parents_rate * population_size)`
    - Sample parent pairs using Glicko rating-based probability (higher rating → higher selection chance)
    - Breed offspring via arithmetic mean crossover (α determined by `alpha_mode`)
    - Apply mutation to offspring parameters
@@ -237,6 +241,8 @@ evo:
   population_size: 20         # Population size (must be even)
   mutation_rate: 0.1          # Probability of each parameter mutating
   mutation_sigma: 0.1         # Standard deviation for Gaussian mutation
+   parents_compete: false      # Keep top parents in next generation unchanged
+   competing_parents_rate: 0.1 # Fraction of population reserved for competing parents
   k: 0.25                     # Percentage of population in tournament selection
   ranking_method: "glicko"    # Ranking method: "glicko", "CLIP-IQA", or "simple"
 ```
@@ -247,6 +253,11 @@ evo:
 - `"fixed"`: Uses the specified `alpha` value for all crossovers
 - `"random"`: Randomly samples alpha for each crossover
 - `"biased"`: Biases alpha toward higher-ranked parent
+
+**Parent Competition Options**:
+- `parents_compete: false`: Entire next population is produced from sampled breeding + mutation.
+- `parents_compete: true`: Top-ranked parents are copied directly into next generation before breeding.
+- `competing_parents_rate`: Proportion of population copied as elite parents when `parents_compete` is enabled.
 
 **Ranking Method Options**:
 - `"glicko"` (recommended for robust ranking): Uses Glicko-2 rating system with incremental updates, accounts for rating uncertainty via pairwise comparisons
@@ -298,6 +309,33 @@ Output ONLY '1' or '2'.
    - Ranked image grids saved to `Experiments/{name}/run{N}/Images/`
    - Parameter JSONs stored in `Experiments/{name}/run{N}/Params/`
    - Configuration backup saved to `Experiments/{name}/experiment_config.yaml`
+
+### Running with the Web App
+
+The repository includes an additive web app that executes the same pipeline in-process.
+
+1. **Start the web server**:
+   ```bash
+   python run_web.py
+   ```
+
+2. **Open the UI**:
+   - `http://127.0.0.1:8000`
+
+3. **Submit a job in the form**:
+   - Fill the same core fields as `run.py` (`experiment_name`, `runs`, `population_size`, `param_spec_file`, `sketch_dir`, prompt, ranking, mutation, selection settings).
+   - Set `parents_compete` and `competing_parents_rate` if you want elite parents retained each generation.
+   - Enable overwrite only when intentionally replacing an existing experiment.
+
+4. **Track execution**:
+   - Jobs page shows `queued` / `running` / `completed` / `failed` status.
+   - Live logs are available per job.
+
+5. **Browse outputs**:
+   - Open experiment pages to view generation images, ranking plots, and parameter JSON files.
+   - Artifacts are read from the same `Experiments/{name}/run{N}/` structure used by CLI runs.
+
+For additional web UI details, see [webapp/README.md](webapp/README.md).
 
 ### Output Structure
 
@@ -357,6 +395,7 @@ See [requirements.txt](requirements.txt) for complete list.
 - **Generation Time**: Parallel mode significantly faster; adjust `workers` based on CPU cores
 - **Timeout**: 20s limit per design render to prevent hangs; may need adjustment for complex sketches
 - **Selection Pressure**: Tournament parameter `k` (as percentage) controls selection pressure; lower k = more elitism
+- **Parent Competition**: Higher `competing_parents_rate` increases exploitation (stability of strong designs) but can reduce diversity
 - **Mutation**: `mutation_rate` controls per-parameter mutation probability; `mutation_sigma` controls magnitude
 - **Ranking Speed**: CLIP-IQA is ~100x faster than pairwise methods for large populations (O(N) vs O(N²) comparisons)
 
