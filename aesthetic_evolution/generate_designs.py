@@ -474,6 +474,8 @@ class DesignEvolver:
                  ranking_method: str = "glicko",
                  mutation_rate: float = 0.1,
                  mutation_sigma: float = 0.1,
+                 parents_compete: bool = False,
+                 competing_parents_rate: float = 0.1,
                  plot_pop: bool = False) -> None:
         """
         Constructor for DesignEvolver class.
@@ -493,10 +495,18 @@ class DesignEvolver:
         :type k: int
         :param alpha_mode: Method for selecting alpha during crossover ("random", "fixed", "biased").
         :type alpha_mode: str
-        :param ranking_method: Method for ranking designs ("glicko", "simple", or "CLIP-IQA").
-        :type ranking_method: str
         :param alpha: Fixed alpha value if alpha_mode is "fixed" between 0 and 1.
         :type alpha: float
+        :param ranking_method: Method for ranking designs ("glicko", "simple", or "CLIP-IQA").
+        :type ranking_method: str
+        :param mutation_rate: Mutation rate for mutating child parameters.
+        :type mutation_rate: float
+        :param mutation_sigma: Standard deviation for Gaussian mutation.
+        :type mutation_sigma: float
+        :param parents_compete: Whether top ranked parents compete in the next generation.
+        :type parents_compete: bool
+        :param competing_parents_rate: Proportion of top ranked parents to include in next population.
+        :type competing_parents_rate: float
         :param plot_pop: Whether to plot the population images.
         :type plot_pop: bool
 
@@ -544,8 +554,13 @@ class DesignEvolver:
         # set plot population boolean
         self.plot_pop = plot_pop
 
+        # set mutation parameters
         self.mutation_rate = mutation_rate
         self.mutation_sigma = mutation_sigma
+
+        # set competing parents rate for next generation
+        self.parents_compete = parents_compete
+        self.competing_parents_rate = competing_parents_rate
 
         # set initial population parameters
         self.population_params = DesignEvolver.generate_initial_params(self.population_size,
@@ -592,6 +607,7 @@ class DesignEvolver:
             ranks = calc_ranks(results, len(filenames))
             sorted_idx = np.argsort(ranks)[::-1]
 
+        # TODO: update so that it does not exhaust all comparisons, instead works on a sample to save computational time, currently runs 120 comparisons for a population of 10 which is excessive.
         elif self.ranking_method == "glicko":
             
             sorted_idx, ranks = self._process_batch_chunked(jobs, chunk_size=32)
@@ -632,9 +648,24 @@ class DesignEvolver:
         :rtype: None
         """
 
+        # TODO: update evolutionary method
+        # TODO: population should consist of top performing parents, children from selection breeding and maybe mutation on randomly selected parents to maintain diversity.
+
+        # initialise next generation
+        next_generation = []
+
+        # option to have top ranked parents compete in the next generation without modification to maintain high performing designs.
+        if self.parents_compete:
+            num_competing_parents = int(self.competing_parents_rate * len(self.population_params))
+            next_generation.extend(self.population_params[:num_competing_parents])
+            remaining_slots = len(self.population_params) - num_competing_parents
+        else:
+            remaining_slots = len(self.population_params)
+
         # sample new population based on ranking probabilities derived from tournament selection
-        sampled_pop = random.choices(self.population_params, weights=self.ranking_probabilities, k=len(self.population_params))
+        sampled_pop = random.choices(self.population_params, weights=self.ranking_probabilities, k=remaining_slots)
         self._plot_population(params=sampled_pop, image_name=f'Population {self.current_population} Selected for Breeding')
+
         # select N couples for crossover
         sampled_couples = [random.choices(sampled_pop, k=2) for _ in range(len(sampled_pop))]
 
@@ -661,7 +692,8 @@ class DesignEvolver:
         for child in children:
             child.mutate(self.mutation_rate)
         
-        self.population_params = children
+        next_generation.extend(children)
+        self.population_params = next_generation
 
     @staticmethod
     def read_param_spec(spec_filepath: str) -> dict:
@@ -814,9 +846,10 @@ class DesignEvolver:
         else:
             filenames = np.array([f"{param.name}.png" for param in params])
 
+
         plot_image_grid(filenames, 
                         nrows=math.ceil(grid_estimate), ncols=math.floor(grid_estimate), 
-                        population_size=self.population_size,
+                        population_size=len(filenames),
                         filepath=population_image_fileapath, 
                         save_path=population_image_fileapath, 
                         ranks=ranks,
@@ -876,6 +909,8 @@ def aesthetic_evolution(experiment_name: str,
                         alpha: float,
                         mutation_rate: float,
                         mutation_sigma: float,
+                        parents_compete: bool,
+                        competing_parents_rate: float,
                         k: float,
                         ranking_method: str = "glicko",
                         population_size: int = 20,
@@ -907,6 +942,10 @@ def aesthetic_evolution(experiment_name: str,
     :type mutation_rate: float
     :param mutation_sigma: Mutation sigma for the evolutionary process.
     :type mutation_sigma: float
+    :param parents_compete: Whether top ranked parents compete in the next generation.
+    :type parents_compete: bool
+    :param competing_parents_rate: Proportion of top ranked parents to include in next population.
+    :type competing_parents_rate: float
     :param k: Tournament size for selection as a percentage of the population.
     :type k: float
     :param ranking_method: Method for ranking designs ("glicko" or "simple").
@@ -946,6 +985,8 @@ def aesthetic_evolution(experiment_name: str,
         mutation_rate=mutation_rate,
         mutation_sigma=mutation_sigma,
         ranking_method=ranking_method,
+        parents_compete=parents_compete,
+        competing_parents_rate=competing_parents_rate,
         plot_pop=True
     )
 

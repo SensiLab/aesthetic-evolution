@@ -1,6 +1,6 @@
 
 job:
-  experiment_name: "CLIP-IQA-test-2"
+  experiment_name: "parents-compete-test"
   param_spec_file: "config/param_spec.yaml"
   sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
   prompt_filepath: "config/reasoning_prompt.txt"
@@ -15,8 +15,10 @@ evo:
   population_size: 26
   mutation_rate: 0.1 # chance of single attribute mutating
   mutation_sigma: 0.1 # sd of guassian noise added to continuous variables
+  parents_compete: True # whether top ranked parents compete in the next generation
+  competing_parents_rate: 0.1 # proportion of top ranked parents to include in next population
   k: 0.25 # percentage of designs to be selected for tournament selection
-  ranking_method: "CLIP-IQA" # simple | glicko | CLIP-IQA
+  ranking_method: "glicko" # simple | glicko | CLIP-IQA
   
 
 
