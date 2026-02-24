@@ -1,6 +1,6 @@
 
 job:
-  experiment_name: "parents-compete-test"
+  experiment_name: "plot-memory-test-1"
   param_spec_file: "config/param_spec.yaml"
   sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
   prompt_filepath: "config/reasoning_prompt.txt"
@@ -18,7 +18,7 @@ evo:
   parents_compete: True # whether top ranked parents compete in the next generation
   competing_parents_rate: 0.1 # proportion of top ranked parents to include in next population
   k: 0.25 # percentage of designs to be selected for tournament selection
-  ranking_method: "glicko" # simple | glicko | CLIP-IQA
+  ranking_method: "CLIP-IQA" # simple | glicko | CLIP-IQA
   
 
 
