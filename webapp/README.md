@@ -45,7 +45,7 @@ Important fields:
 - **Population Size (even)**: Must be an even integer.
 - **Param Spec File**: Usually `config/param_spec.yaml`.
 - **Sketch Directory**: Absolute or repo-relative path to your Processing sketch.
-- **Prompt Filepath** or **Prompt Text**: provide one (prompt text overrides filepath when present).
+- **Prompt Text**: required input. The form is prefilled with `config/reasoning_prompt.txt` by default.
 - **Processing**: `serial` or `parallel`.
 - **Workers**: Parallel worker count (used if processing is parallel).
 - **Alpha Mode / Alpha**:
@@ -108,7 +108,7 @@ Web UI runtime metadata is stored in:
 ## Troubleshooting
 - **Import error for Flask**: install Flask in your active Python environment.
 - **Sketch path not found**: check `Sketch Directory` path is valid on disk.
-- **Prompt file not found**: verify `Prompt Filepath` exists, or paste prompt into `Prompt Text`.
+- **Prompt required**: ensure `Prompt Text` is not empty.
 - **Experiment already exists**: enable **Overwrite Existing Experiment** if replacement is intended.
 - **Long runtime**: expected for larger populations/runs and model-based ranking.
 

@@ -13,8 +13,7 @@ class WebJobConfig:
     population_size: int
     param_spec_file: str
     sketch_dir: str
-    prompt_filepath: str | None
-    prompt_text: str | None
+    prompt_text: str
     processing: str
     screen: bool
     workers: int
@@ -29,13 +28,12 @@ class WebJobConfig:
     overwrite: bool = False
 
     def snapshot(self) -> dict[str, Any]:
-        prompt_ref = self.prompt_filepath if self.prompt_filepath else "<inline prompt>"
         return {
             "job": {
                 "experiment_name": self.experiment_name,
                 "param_spec_file": self.param_spec_file,
                 "sketch_dir": self.sketch_dir,
-                "prompt_filepath": prompt_ref,
+                "prompt_source": "web_input",
                 "processing": self.processing,
                 "screen": self.screen,
                 "workers": self.workers,

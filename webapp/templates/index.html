@@ -32,9 +32,8 @@
 
         <div class="row"><label>Param Spec File</label><input name="param_spec_file" value="{{ defaults.param_spec_file }}" required /></div>
         <div class="row"><label>Sketch Directory</label><input name="sketch_dir" value="{{ defaults.sketch_dir }}" required /></div>
-        <div class="row"><label>Prompt Filepath</label><input name="prompt_filepath" value="{{ defaults.prompt_filepath }}" /></div>
+        <div class="row"><label>Prompt Text</label><textarea name="prompt_text" required>{{ defaults.prompt_text }}</textarea></div>
 
-        <div class="row"><label>Prompt Text (optional override)</label><textarea name="prompt_text"></textarea></div>
         <div class="row"><label>Processing</label>
           <select name="processing">
             <option value="serial" {% if defaults.processing == 'serial' %}selected{% endif %}>serial</option>

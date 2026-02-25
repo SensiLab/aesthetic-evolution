@@ -247,11 +247,14 @@ class DesignGenerator:
     def __init__(self, 
                  experiment_name: str,
                  sketch_dir: str,
+                 prompt: str,
                  processing: str = "serial",
                  screen: bool = False,
                  workers: int = 8) -> None:
         """
         Constructor for DesignGenerator class.
+        @author: Stephen Krol
+        @date: Jan 2026
         
         :param self: Current instance of the class. 
         :param experiment_name: Name of the experiment.
@@ -271,7 +274,7 @@ class DesignGenerator:
 
         # initialise folder structure
         self.experiment_name = experiment_name
-        self._initialise()
+        self._initialise(prompt)
 
         # set processing directory
         self.sketch_dir = sketch_dir
@@ -411,13 +414,15 @@ class DesignGenerator:
             except subprocess.TimeoutExpired:
                 print(f"Timeout expired for design: {filename}")
 
-    def _initialise(self) -> None:
+    def _initialise(self, prompt: str) -> None:
         """
         Method to initialise the Designs directory structure.
         @author: Stephen Krol
         @date: Jan 2026
 
         :param self: Current instance of the class.
+        :param prompt: Prompt for LLM to use in ranking designs, will be saved to experiment directory.
+        :type prompt: str
 
         :return: None
         :rtype: None
@@ -426,8 +431,15 @@ class DesignGenerator:
         if not os.path.exists("Experiments"):
             os.mkdir("Experiments")
 
-        if not os.path.exists(f"Experiments/{self.experiment_name}"):
-            os.mkdir(f"Experiments/{self.experiment_name}")
+        experiment_filepath = f"Experiments/{self.experiment_name}"
+
+        if not os.path.exists(experiment_filepath):
+            os.mkdir(experiment_filepath)
+        
+        # save prompt to experiment directory
+        with open(f"{experiment_filepath}/prompt.txt", 'w') as f:
+            f.write(prompt)
+        
 
     def _initialise_design(self, name: str):
         """
@@ -965,6 +977,7 @@ def aesthetic_evolution(experiment_name: str,
     generator = DesignGenerator(
             experiment_name=experiment_name,
             sketch_dir=sketch_dir,
+            prompt=prompt,
             processing=processing,
             screen=screen,
             workers=workers

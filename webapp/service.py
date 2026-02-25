@@ -178,15 +178,7 @@ class JobService:
         return getattr(config, field_name)
 
     def _resolve_prompt(self, config: WebJobConfig) -> str:
-        if config.prompt_text:
-            return config.prompt_text
-
-        assert config.prompt_filepath is not None
-        prompt_path = self._resolve_path(config.prompt_filepath)
-        if not prompt_path.exists() or not prompt_path.is_file():
-            raise ValidationError(f"Prompt file '{config.prompt_filepath}' not found.")
-
-        return prompt_path.read_text(encoding="utf-8")
+        return config.prompt_text
 
     def _parse_config(self, payload: dict[str, Any]) -> WebJobConfig:
         alpha_mode = str(payload.get("alpha_mode", "")).strip()
@@ -208,9 +200,12 @@ class JobService:
             raise ValidationError("experiment_name contains invalid filesystem characters")
 
         prompt_filepath = str(payload.get("prompt_filepath", "")).strip() or None
-        prompt_text = str(payload.get("prompt_text", "")).strip() or None
-        if prompt_filepath is None and prompt_text is None:
-            raise ValidationError("Provide either prompt_filepath or prompt_text")
+        if prompt_filepath is not None:
+            raise ValidationError("prompt_filepath is not supported; provide prompt_text only")
+
+        prompt_text = str(payload.get("prompt_text", "")).strip()
+        if not prompt_text:
+            raise ValidationError("prompt_text is required")
 
         alpha = payload.get("alpha")
         if alpha in ("", None):
@@ -274,18 +269,12 @@ class JobService:
         if not sketch_path.exists() or not sketch_path.is_dir():
             raise ValidationError(f"sketch_dir '{sketch_dir}' not found")
 
-        if prompt_filepath is not None:
-            resolved_prompt_path = self._resolve_path(prompt_filepath)
-            if not resolved_prompt_path.exists() or not resolved_prompt_path.is_file():
-                raise ValidationError(f"prompt_filepath '{prompt_filepath}' not found")
-
         config = WebJobConfig(
             experiment_name=experiment_name,
             runs=runs,
             population_size=population_size,
             param_spec_file=str(spec_path),
             sketch_dir=str(sketch_path),
-            prompt_filepath=str(self._resolve_path(prompt_filepath)) if prompt_filepath else None,
             prompt_text=prompt_text,
             processing=processing,
             screen=self._to_bool(payload.get("screen", False)),
