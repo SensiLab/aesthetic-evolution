@@ -70,6 +70,7 @@ class JobService:
         return sorted(runs, key=lambda item: int(item.removeprefix("run")) if item.removeprefix("run").isdigit() else 9999)
 
     def run_artifacts(self, experiment_name: str, run_name: str) -> dict[str, Any]:
+        experiment_path = self.experiments_root / experiment_name
         run_path = self.experiments_root / experiment_name / run_name
         images_path = run_path / "Images"
         params_path = run_path / "Params"
@@ -92,10 +93,22 @@ class JobService:
         if params_path.exists():
             param_files = [file.name for file in sorted(params_path.iterdir()) if file.is_file() and file.suffix.lower() == ".json"]
 
+        experiment_files = []
+        config_file = experiment_path / "experiment_config.yaml"
+        if config_file.exists() and config_file.is_file():
+            experiment_files.append(config_file.name)
+
+        for file in sorted(experiment_path.iterdir()):
+            if not file.is_file() or file.name == "experiment_config.yaml":
+                continue
+            if "prompt" in file.name.lower():
+                experiment_files.append(file.name)
+
         return {
             "plot_files": plot_files,
             "design_files": design_files,
             "param_files": param_files,
+            "experiment_files": experiment_files,
         }
 
     def _worker_loop(self) -> None:

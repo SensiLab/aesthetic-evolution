@@ -96,7 +96,7 @@ def create_app() -> Flask:
             abort(404)
 
         selected_run = request.args.get("run") or (runs[0] if runs else None)
-        artifacts = service.run_artifacts(experiment_name, selected_run) if selected_run else {"plot_files": [], "design_files": [], "param_files": []}
+        artifacts = service.run_artifacts(experiment_name, selected_run) if selected_run else {"plot_files": [], "design_files": [], "param_files": [], "experiment_files": []}
 
         return render_template(
             "experiment.html",

@@ -43,10 +43,10 @@
         <div class="row"><label>Workers</label><input name="workers" type="number" value="{{ defaults.workers }}" required /></div>
 
         <div class="row"><label>Alpha Mode</label>
-          <select name="alpha_mode">
-            <option value="random">random</option>
-            <option value="fixed">fixed</option>
-            <option value="biased">biased</option>
+          <select name="alpha_mode" required>
+            <option value="random" {% if defaults.alpha_mode == 'random' %}selected{% endif %}>random</option>
+            <option value="fixed" {% if defaults.alpha_mode == 'fixed' %}selected{% endif %}>fixed</option>
+            <option value="biased" {% if defaults.alpha_mode == 'biased' %}selected{% endif %}>biased</option>
           </select>
         </div>
         <div class="row"><label>Alpha (for fixed mode)</label><input name="alpha" type="number" step="0.01" value="{{ defaults.alpha }}" /></div>
