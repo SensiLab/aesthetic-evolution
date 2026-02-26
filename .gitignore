@@ -10,3 +10,5 @@ Experiments
 *.json
 probability_simulation.py
 .github/
+test1/
+test-run-1/

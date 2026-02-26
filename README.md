@@ -337,6 +337,29 @@ The repository includes an additive web app that executes the same pipeline in-p
 
 For additional web UI details, see [webapp/README.md](webapp/README.md).
 
+### Running the Standalone Pairwise Voting App
+
+This app is separate from the experiment web UI and presents two images per round with three choices: first image, second image, or draw.
+
+1. **Start the standalone server**:
+   ```bash
+   python run_pairwise_coverage.py --n 3 --data-dir Data/benchmark/Images
+   ```
+
+2. **Open the app**:
+   - `http://127.0.0.1:5050/compare`
+
+3. **Behavior guarantees**:
+   - Unordered pairs are never repeated.
+   - The app keeps scheduling comparisons until every image has been shown at least `n` times, or marks the target impossible.
+   - Coverage and no-repeat constraints are global across restarts/sessions via persistent state files.
+
+4. **Output files**:
+   - CSV outcomes: `pairwise_coverage_app/state/labels.csv`
+   - State snapshot: `pairwise_coverage_app/state/global_state.json`
+
+Use `--state-dir` if you want separate datasets/runs to use independent tracking files.
+
 ### Output Structure
 
 ```

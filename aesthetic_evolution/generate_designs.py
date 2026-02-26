@@ -463,8 +463,7 @@ class DesignGenerator:
 
         if not os.path.exists(f"Experiments/{self.experiment_name}/{name}/Params"):
             os.mkdir(f"Experiments/{self.experiment_name}/{name}/Params")
-
-            
+        
 class DesignEvolver:
     """
     Class to manage the evolution of design populations using tournament selection.
