@@ -1,14 +1,21 @@
+
+# Git ignore file for the aesthetic-evolution project
 __pycache__/
 .ipynb_checkpoints/
 check_images/
 curl_noise_03/
 qwen3_system_prompt_jon.ipynb
 Designs/
-*.png
-*.jpg
-Experiments
-*.json
-probability_simulation.py
-.github/
+Data/
+Experiments/
 test1/
 test-run-1/
+jon-ranking/
+
+# ignore file types
+*.png
+*.jpg
+*.json
+*.csv
+probability_simulation.py
+.github/
