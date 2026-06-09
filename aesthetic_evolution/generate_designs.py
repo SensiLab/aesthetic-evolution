@@ -487,6 +487,8 @@ class DesignEvolver:
                  mutation_sigma: float = 0.1,
                  parents_compete: bool = False,
                  competing_parents_rate: float = 0.1,
+                 pos_prompt: str = "Good Design",
+                 neg_prompt: str = "Bad Design",
                  plot_pop: bool = False) -> None:
         """
         Constructor for DesignEvolver class.
@@ -518,6 +520,10 @@ class DesignEvolver:
         :type parents_compete: bool
         :param competing_parents_rate: Proportion of top ranked parents to include in next population.
         :type competing_parents_rate: float
+        :param pos_prompt: Positive prompt for CLIP-IQA scoring.
+        :type pos_prompt: str
+        :param neg_prompt: Negative prompt for CLIP-IQA scoring.
+        :type neg_prompt: str
         :param plot_pop: Whether to plot the population images.
         :type plot_pop: bool
 
@@ -556,11 +562,19 @@ class DesignEvolver:
         # initialise processor
         if ranking_method == "CLIP-IQA":
             self.processor = CLIP_IQA()
+            self.pos_prompt = pos_prompt
+            self.neg_prompt = neg_prompt
         else:
+            # self.processor = Qwen3VLBatchProcessor(
+            #         model_name="Qwen/Qwen3-VL-8B-Thinking",
+            #         device="cuda" if torch.cuda.is_available() else "cpu"
+            #         )
+            
             self.processor = Qwen3VLBatchProcessor(
-                    model_name="Qwen/Qwen3-VL-7B-Instruct",
+                    model_name="Qwen/Qwen3-VL-8B-Instruct",
                     device="cuda" if torch.cuda.is_available() else "cpu"
                     )
+        
 
         # set plot population boolean
         self.plot_pop = plot_pop
@@ -628,12 +642,14 @@ class DesignEvolver:
             image_paths = [f"{population_image_fileapath}/{filename}" for filename in filenames]
             scores = self.processor.compute_clip_iqa_score(
                 image_path=image_paths,
-                positive_prompt="Good Design",
-                negative_prompt="Bad Design"
+                positive_prompt=self.pos_prompt,
+                negative_prompt=self.neg_prompt
             )
 
             sorted_idx = sorted(range(len(scores)), key=lambda i: scores[i][0], reverse=True)
             ranks = np.array([score[0] for score in scores])
+
+            print(sorted_idx)
 
         self.population_params = [self.population_params[i] for i in sorted_idx]
         sorted_ranks = ranks[sorted_idx]
@@ -927,7 +943,9 @@ def aesthetic_evolution(experiment_name: str,
                         population_size: int = 20,
                         processing: str = "serial",
                         screen: bool = False,
-                        workers: int = 8) -> None:
+                        workers: int = 8,
+                        pos_prompt: str | None = None,
+                        neg_prompt: str | None = None) -> None:
     """
     Main function for generating and evolving design populations.
     @author: Stephen Krol
@@ -967,6 +985,10 @@ def aesthetic_evolution(experiment_name: str,
     :type screen: bool
     :param workers: Number of worker threads or processes to use.
     :type workers: int
+    :param pos_prompt: Positive prompt for CLIP-IQA scoring.
+    :type pos_prompt: str | None
+    :param neg_prompt: Negative prompt for CLIP-IQA scoring.
+    :type neg_prompt: str | None
 
     :return: None
     :rtype: None
@@ -986,6 +1008,9 @@ def aesthetic_evolution(experiment_name: str,
     k = max(2, round(k * population_size))
 
     # initialise evolver
+    resolved_pos_prompt = pos_prompt if pos_prompt is not None else "Good Design"
+    resolved_neg_prompt = neg_prompt if neg_prompt is not None else "Bad Design"
+
     evolver = DesignEvolver(
         spec_filepath=param_spec_filepath,
         experiment_name=experiment_name,
@@ -999,6 +1024,8 @@ def aesthetic_evolution(experiment_name: str,
         ranking_method=ranking_method,
         parents_compete=parents_compete,
         competing_parents_rate=competing_parents_rate,
+        pos_prompt=resolved_pos_prompt,
+        neg_prompt=resolved_neg_prompt,
         plot_pop=True
     )
 
