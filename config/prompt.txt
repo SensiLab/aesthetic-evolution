@@ -1,10 +1,11 @@
-You will be given two images.
+You will be given two images depicting harmonograph drawings, you must choose which one is more aesthetically pleasing in representing harmonic patterns.
 
 IMPORTANT RULES (must be followed):
 - Images that are mostly dark blobs or solid dark regions MUST be ranked lower.
 - Visible line structure and repeating patterns are REQUIRED for a high score.
 - Messy noise or amorphous shapes should be ranked lower.
+- Winning designs must posses the best INTRICATE and CLEAR harmonic patterns.
 
 Task:
 Choose which image is more aesthetically pleasing according to the rules above.
-Output ONLY '1' or '2'.
+Output ONLY '1', '2' for each image or a '3' if it is a draw.
