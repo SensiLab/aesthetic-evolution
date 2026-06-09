@@ -28,6 +28,8 @@ The system supports both serial and parallel design generation, headless renderi
 - **Parallel Processing**: Multi-worker design generation and chunked GPU batch inference
 - **Headless Rendering**: Support for server environments without displays
 - **Web Interface (Additive)**: Browser UI for job submission, live logs, and generation/result browsing without changing `run.py`
+- **Standalone Design Generation**: `generate.py` generates a random population without running evolution, useful for building benchmark datasets
+- **Benchmarking and Evaluation**: `evaluate_scores.py` compares model rankings against human rankings using Glicko scoring, sampled evaluation, Spearman/Kendall correlation, and top-k Jaccard similarity
 
 ## Installation and Setup
 
@@ -212,7 +214,12 @@ The `run.py` script orchestrates the complete evolutionary pipeline. It loads co
 
 ### Configuration
 
-All experiment parameters are configured in [config/experiment_config.yaml](config/experiment_config.yaml), which is organized into two sections:
+Two configuration files are used:
+
+- **[config/experiment_config.yaml](config/experiment_config.yaml)**: Full evolutionary experiment configuration (used by `run.py` and `run_web.py`)
+- **[config/generation_config.yaml](config/generation_config.yaml)**: Lightweight config for standalone design generation (used by `generate.py`); only needs `param_spec_file`, `sketch_dir`, `processing`, `screen`, `workers`, and `population_size`
+
+`experiment_config.yaml` is organized into two sections:
 
 #### Job Configuration
 
@@ -266,8 +273,16 @@ evo:
 
 **LLM Prompt File**:
 
-The prompt is now stored in a separate file (e.g., [config/prompt.txt](config/prompt.txt)):
+The prompt is stored in a separate file specified by `prompt_filepath`. Several example prompts are included in `config/`:
 
+| File | Purpose |
+|------|---------|
+| `config/prompt.txt` | Default aesthetic evaluation prompt |
+| `config/jon_prompt.txt` | Prompt used for the human-labelled benchmark dataset |
+| `config/butterfly_prompt.txt` | Butterfly-themed aesthetic prompt |
+| `config/reasoning_prompt.txt` | Prompt that encourages chain-of-thought reasoning before the final answer |
+
+Example (`config/prompt.txt`):
 ```text
 You will be given two images.
 
@@ -310,6 +325,27 @@ Output ONLY '1' or '2'.
    - Parameter JSONs stored in `Experiments/{name}/run{N}/Params/`
    - Configuration backup saved to `Experiments/{name}/experiment_config.yaml`
 
+### Generating a Benchmark Dataset
+
+`generate.py` creates a population of random designs without running the evolutionary loop. This is useful for building a fixed benchmark set for evaluation.
+
+1. **Configure generation settings** in [config/generation_config.yaml](config/generation_config.yaml):
+   ```yaml
+   param_spec_file: "config/param_spec.yaml"
+   sketch_dir: "/path/to/Harmonograph"
+   processing: parallel
+   screen: False
+   workers: 8
+   population_size: 100
+   ```
+
+2. **Execute**:
+   ```bash
+   python generate.py
+   ```
+
+   Output is written to `Data/benchmark/Images/` and `Data/benchmark/Params/`.
+
 ### Running with the Web App
 
 The repository includes an additive web app that executes the same pipeline in-process.
@@ -346,6 +382,16 @@ This app is separate from the experiment web UI and presents two images per roun
    python run_pairwise_coverage.py --n 3 --data-dir Data/benchmark/Images
    ```
 
+   Full CLI options:
+   | Flag | Default | Description |
+   |------|---------|-------------|
+   | `--n` | *(required)* | Minimum times each image must be shown globally |
+   | `--data-dir` | `Data/curated/Images` | Directory of images to compare |
+   | `--state-dir` | `pairwise_coverage_app/state` | Persistent CSV and state directory |
+   | `--host` | `0.0.0.0` | Host to bind |
+   | `--port` | `5050` | Port to bind |
+   | `--debug` | off | Enable Flask debug mode |
+
 2. **Open the app**:
    - `http://127.0.0.1:5050/compare`
 
@@ -354,11 +400,63 @@ This app is separate from the experiment web UI and presents two images per roun
    - The app keeps scheduling comparisons until every image has been shown at least `n` times, or marks the target impossible.
    - Coverage and no-repeat constraints are global across restarts/sessions via persistent state files.
 
-4. **Output files**:
+4. **API endpoints**:
+   | Endpoint | Method | Description |
+   |----------|--------|-------------|
+   | `/compare` | GET | Main voting UI |
+   | `/vote` | POST | Submit a vote (`image_a`, `image_b`, `outcome`) |
+   | `/undo` | POST | Undo the most recent vote for the current session |
+   | `/status` | GET | JSON status payload (counts, deficits, can_undo) |
+   | `/progress` | GET | Glicko convergence metrics: `estimated_comparisons_left`, `average_deviation`, `max_deviation` |
+   | `/images/<image_id>` | GET | Serve an image file by ID |
+
+5. **Output files**:
    - CSV outcomes: `pairwise_coverage_app/state/labels.csv`
    - State snapshot: `pairwise_coverage_app/state/global_state.json`
 
 Use `--state-dir` if you want separate datasets/runs to use independent tracking files.
+
+### Benchmarking: Evaluating Model Rankings Against Human Labels
+
+`evaluate_scores.py` provides tools to compare a VLM's aesthetic rankings against a human-labelled ground truth. It is also imported by `pairwise_coverage_app` to compute live Glicko convergence metrics on the `/progress` endpoint.
+
+#### Key Functions
+
+| Function | Description |
+|----------|-------------|
+| `calc_scores(scores_path, plot)` | Computes Glicko ratings from a CSV of pairwise outcomes (`image_a`, `image_b`, `outcome`). Returns players sorted by rating. |
+| `calc_scores_sampled(scores_path, n, plot, seed)` | Same as `calc_scores` but on a random subset where each design appears in at most `n` comparisons. Pass `seed` for reproducibility. |
+| `compare_rankings(ranking_a, ranking_b, k_values)` | Computes Spearman rho, Kendall tau, and top-k overlap/Jaccard between two ordered ID lists. |
+| `model_predictions(model_name, prompt_filepath, benchmark_dir, ...)` | Runs the VLM over all pairs in `benchmark_dir` and writes predictions to a CSV. |
+| `CLIP_IQA_Score(image_dir, positive_prompt, negative_prompt)` | Ranks images using CLIP-IQA and returns ordered IDs. |
+| `get_structural_complexity(img_path)` | Returns a scalar structural complexity score for a single image. |
+
+#### CLI Usage
+
+```bash
+python evaluate_scores.py \
+    --benchmark_dir Data/curated/Images \
+    --benchmark_scores_csv jon-ranking/labels.csv \
+    --model_name Qwen/Qwen3-VL-8B-Instruct \
+    --prompt_filepath config/prompt.txt \
+    --model_predictions_csv model_predictions.csv \
+    --n 50
+```
+
+The script runs the full pipeline: generates model predictions, computes Glicko scores for both human and model rankings, then reports averaged Spearman rho, Kendall tau, and top-5/10/20 Jaccard over 1000 sampled subsets (each design appears in at most `n` comparisons per sample). If `traditional-results.csv` exists, it also benchmarks structural complexity metrics.
+
+#### CSV Format
+
+Both human labels (`--benchmark_scores_csv`) and model predictions (`--model_predictions_csv`) use the same format:
+
+```
+image_a,image_b,outcome
+run_1.png,run_2.png,first    # first image wins
+run_3.png,run_4.png,second   # second image wins
+run_5.png,run_6.png,draw     # draw
+```
+
+The 5-column format (with `timestamp,session_id` prefix) produced by the pairwise coverage app is also accepted automatically.
 
 ### Output Structure
 
