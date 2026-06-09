@@ -11,7 +11,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default=Path("Data/benchmark/Images"),
+        default=Path("Data/curated/Images"),
         help="Directory containing images used for pairwise voting",
     )
     parser.add_argument(
