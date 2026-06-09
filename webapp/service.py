@@ -159,6 +159,8 @@ class JobService:
                     workers=config.workers,
                     parents_compete=config.parents_compete,
                     competing_parents_rate=config.competing_parents_rate,
+                    pos_prompt=config.pos_prompt,
+                    neg_prompt=config.neg_prompt,
                 )
 
                 exp_dir.mkdir(parents=True, exist_ok=True)
@@ -217,8 +219,19 @@ class JobService:
             raise ValidationError("prompt_filepath is not supported; provide prompt_text only")
 
         prompt_text = str(payload.get("prompt_text", "")).strip()
-        if not prompt_text:
-            raise ValidationError("prompt_text is required")
+        pos_prompt = str(payload.get("pos_prompt", "")).strip() or None
+        neg_prompt = str(payload.get("neg_prompt", "")).strip() or None
+
+        if ranking_method == "CLIP-IQA":
+            if not pos_prompt:
+                raise ValidationError("pos_prompt is required when ranking_method is CLIP-IQA")
+            if not neg_prompt:
+                raise ValidationError("neg_prompt is required when ranking_method is CLIP-IQA")
+        else:
+            if not prompt_text:
+                raise ValidationError("prompt_text is required")
+            pos_prompt = None
+            neg_prompt = None
 
         alpha = payload.get("alpha")
         if alpha in ("", None):
@@ -300,6 +313,8 @@ class JobService:
             competing_parents_rate=competing_rate_value,
             k=k,
             ranking_method=ranking_method,
+            pos_prompt=pos_prompt,
+            neg_prompt=neg_prompt,
             overwrite=self._to_bool(payload.get("overwrite", False)),
         )
         return config

@@ -25,9 +25,28 @@ class WebJobConfig:
     competing_parents_rate: float | None
     k: float
     ranking_method: str
+    pos_prompt: str | None = None
+    neg_prompt: str | None = None
     overwrite: bool = False
 
     def snapshot(self) -> dict[str, Any]:
+        evo_config = {
+            "runs": self.runs,
+            "population_size": self.population_size,
+            "alpha_mode": self.alpha_mode,
+            "alpha": self.alpha,
+            "mutation_rate": self.mutation_rate,
+            "mutation_sigma": self.mutation_sigma,
+            "parents_compete": self.parents_compete,
+            "competing_parents_rate": self.competing_parents_rate,
+            "k": self.k,
+            "ranking_method": self.ranking_method,
+        }
+
+        if self.ranking_method == "CLIP-IQA":
+            evo_config["pos_prompt"] = self.pos_prompt
+            evo_config["neg_prompt"] = self.neg_prompt
+
         return {
             "job": {
                 "experiment_name": self.experiment_name,
@@ -38,18 +57,7 @@ class WebJobConfig:
                 "screen": self.screen,
                 "workers": self.workers,
             },
-            "evo": {
-                "runs": self.runs,
-                "population_size": self.population_size,
-                "alpha_mode": self.alpha_mode,
-                "alpha": self.alpha,
-                "mutation_rate": self.mutation_rate,
-                "mutation_sigma": self.mutation_sigma,
-                "parents_compete": self.parents_compete,
-                "competing_parents_rate": self.competing_parents_rate,
-                "k": self.k,
-                "ranking_method": self.ranking_method,
-            },
+            "evo": evo_config,
         }
 
 

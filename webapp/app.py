@@ -26,6 +26,8 @@ def create_app() -> Flask:
                 "population_size": 10,
                 "param_spec_file": "config/param_spec.yaml",
                 "prompt_text": default_prompt_text,
+                "pos_prompt": "Good Design",
+                "neg_prompt": "Bad Design",
                 "processing": "parallel",
                 "screen": False,
                 "workers": 8,
@@ -35,7 +37,7 @@ def create_app() -> Flask:
                 "mutation_sigma": 0.1,
                 "parents_compete": True,
                 "competing_parents_rate": 0.1,
-                "k": 0.5,
+                "k": 0.25,
                 "ranking_method": "glicko",
                 "overwrite": False,
                 "sketch_dir": "/home/sjkro1/ARC-Discovery/Harmonograph",
@@ -45,6 +47,8 @@ def create_app() -> Flask:
     @app.post("/jobs")
     def create_job():
         payload = request.form.to_dict(flat=True)
+        payload["pos_prompt"] = request.form.get("pos_prompt", "")
+        payload["neg_prompt"] = request.form.get("neg_prompt", "")
         payload["screen"] = "screen" in request.form
         payload["parents_compete"] = "parents_compete" in request.form
         payload["overwrite"] = "overwrite" in request.form
