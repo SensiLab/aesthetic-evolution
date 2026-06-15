@@ -55,6 +55,7 @@ Important fields:
 - **Mutation Rate / Mutation Sigma**: Evolution mutation controls.
 - **Tournament k ratio (0..1)**: Fraction converted internally to tournament size.
 - **Ranking Method**: `glicko`, `simple`, or `CLIP-IQA`.
+- **Positive Prompt / Negative Prompt** (`pos_prompt` / `neg_prompt`): Only used when **Ranking Method** is `CLIP-IQA`. Describe what a "good" and "bad" image look like as plain text (defaults: `"Good Design"` / `"Bad Design"`). Ignored by Glicko and Simple methods.
 - **Screen**: Enable if Processing can access a display.
 - **Parents Compete / Competing Parents Rate**: Carry over top parents if enabled.
 - **Overwrite Existing Experiment**: Required if the experiment name already exists.
