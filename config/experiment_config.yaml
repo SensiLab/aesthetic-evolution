@@ -1,8 +1,9 @@
 
 job:
-  experiment_name: "parents-compete-test"
+  experiment_name: "model-naming-test"
   param_spec_file: "config/param_spec.yaml"
-  sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
+  # sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
+  sketch_dir: "/app/Harmonograph" # for docker
   prompt_filepath: "config/reasoning_prompt.txt"
   processing: parallel
   screen: False
@@ -11,13 +12,13 @@ job:
 evo:
   alpha_mode: "biased" # fixed | random | biased
   alpha: 0.5 
-  runs: 10
+  runs: 5
   population_size: 26
   mutation_rate: 0.1 # chance of single attribute mutating
   mutation_sigma: 0.1 # sd of guassian noise added to continuous variables
   parents_compete: True # whether top ranked parents compete in the next generation
   competing_parents_rate: 0.1 # proportion of top ranked parents to include in next population
-  k: 0.25 # percentage of designs to be selected for tournament selection
+  k: 0.1 # percentage of designs to be selected for tournament selection
   ranking_method: "glicko" # simple | glicko | CLIP-IQA
   
 

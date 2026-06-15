@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pairwise Voting</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 1.5rem;
+        display: flex;
+        justify-content: center;
+      }
+      .app-shell {
+        width: 100%;
+        max-width: 1500px;
+        text-align: center;
+      }
+      .images {
+        display: grid;
+        grid-template-columns: 640px 220px 640px;
+        column-gap: 2rem;
+        margin-bottom: 1rem;
+        align-items: center;
+        justify-content: center;
+      }
+      .card {
+        border: 1px solid #ddd;
+        padding: 0.75rem;
+        max-width: 100%;
+        justify-self: center;
+      }
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+      }
+      button {
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+      }
+      .image-select {
+        border: 2px solid #ddd;
+        background: #fff;
+        width: 640px;
+        height: 512px;
+        padding: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .image-select:hover {
+        border-color: #999;
+      }
+      .draw-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 220px;
+      }
+      .draw-button {
+        width: 180px;
+        height: 72px;
+        font-size: 1.2rem;
+        font-weight: 600;
+      }
+      .meta {
+        color: #444;
+        margin-bottom: 0.75rem;
+      }
+      .progress-tools {
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .progress-output {
+        width: 100%;
+        margin-top: 0.25rem;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+    <h1>Choose the Better Image</h1>
+    <div class="meta">
+      Target n: {{ status.target_n }} | Votes: {{ status.total_votes }} | Used pairs: {{ status.used_pairs }}
+    </div>
+    <div class="progress-tools">
+      <button type="button" id="calculate-progress">Calculate Progress</button>
+      <form method="post" action="{{ url_for('undo') }}" style="display:inline;">
+        <button type="submit" {% if not status.can_undo %}disabled{% endif %}>Back</button>
+      </form>
+      <div id="progress-output" class="progress-output">Progress metrics not calculated yet.</div>
+    </div>
+    <form method="post" action="{{ url_for('vote') }}">
+      <input type="hidden" name="image_a" value="{{ image_a }}" />
+      <input type="hidden" name="image_b" value="{{ image_b }}" />
+
+      <div class="images">
+        <div class="card">
+          <h3>First image</h3>
+          <button type="submit" class="image-select" name="outcome" value="first" aria-label="Select first image as better">
+            <img src="{{ url_for('image_file', image_id=image_a) }}" alt="First image" />
+          </button>
+        </div>
+        <div class="draw-wrap">
+          <button type="submit" class="draw-button" name="outcome" value="draw">Draw</button>
+        </div>
+        <div class="card">
+          <h3>Second image</h3>
+          <button type="submit" class="image-select" name="outcome" value="second" aria-label="Select second image as better">
+            <img src="{{ url_for('image_file', image_id=image_b) }}" alt="Second image" />
+          </button>
+        </div>
+      </div>
+    </form>
+    </div>
+    <script>
+      const progressButton = document.getElementById("calculate-progress");
+      const progressOutput = document.getElementById("progress-output");
+
+      progressButton.addEventListener("click", async () => {
+        progressButton.disabled = true;
+        progressOutput.textContent = "Calculating...";
+
+        try {
+          const response = await fetch("{{ url_for('progress') }}");
+          const data = await response.json();
+
+          if (!data.ok) {
+            progressOutput.textContent = "Progress calculation failed.";
+            return;
+          }
+
+          if (!data.implemented) {
+            progressOutput.textContent = "Progress calculation function is not implemented yet.";
+            return;
+          }
+
+          progressOutput.textContent =
+            `Estimated comparisons left: ${data.estimated_comparisons_left} | ` +
+            `Average deviation: ${data.average_deviation} | ` +
+            `Max deviation: ${data.max_deviation}`;
+        } catch (_err) {
+          progressOutput.textContent = "Unable to fetch progress metrics.";
+        } finally {
+          progressButton.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

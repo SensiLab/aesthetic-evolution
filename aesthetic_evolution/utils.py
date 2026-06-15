@@ -127,6 +127,8 @@ def update_glicko_scores(players: list, results: List[dict]) -> None:
                 "opponent_deviations": [],
                 "outcomes": []
             }
+
+    ramble_draws = 0
     
     # pre rating update
     # for player_id in games:
@@ -143,8 +145,9 @@ def update_glicko_scores(players: list, results: List[dict]) -> None:
             try:
                 rank = int(result["result"][-1].strip())
             except Exception as e:
-                print(result["result"])
-                raise(e)
+                # print(result["result"])
+                rank = 3 # default to draw if parsing fails
+                ramble_draws += 1
         else:
             rank = int(result["result"].strip())
 
@@ -161,13 +164,10 @@ def update_glicko_scores(players: list, results: List[dict]) -> None:
         games[j]["opponent_deviations"].append(snapshot_deviations[i])
         games[j]["outcomes"].append(score_j)
 
-    
+    print("Ramble Draws (unclear outcomes due to model rambling):", ramble_draws)
     # update ratings
     for player_id, game in games.items():
         players[player_id].update_rating(game["opponent_ratings"], game["opponent_deviations"], game["outcomes"])
-
-
-
 
 def plot_image_grid(filenames: list,
                     nrows: int,
@@ -205,26 +205,29 @@ def plot_image_grid(filenames: list,
     :return: None
     :rtype: None
     """
-    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 10))
-    for i in range(nrows):
-        for j in range(ncols):
-            idx = i * ncols + j
-            if idx >= population_size:
+    try:
+        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(10, 10))
+        for i in range(nrows):
+            for j in range(ncols):
+                idx = i * ncols + j
+                if idx >= population_size:
+                    ax[i, j].axis('off')
+                    continue
+                img = plt.imread(os.path.join(filepath, filenames[idx]))
+                ax[i, j].imshow(img)
+                if ranks is not None:
+                    ax[i, j].set_title(f"{filenames[idx].split('_')[-1].strip('.png')} : {round(ranks[idx], 2)}")
+                else:
+                    ax[i, j].set_title(filenames[idx].split('_')[-1].strip('.png'))
                 ax[i, j].axis('off')
-                continue
-            img = plt.imread(os.path.join(filepath, filenames[idx]))
-            ax[i, j].imshow(img)
-            if ranks is not None:
-                ax[i, j].set_title(f"{filenames[idx].split('_')[-1].strip('.png')} : {round(ranks[idx], 2)}")
-            else:
-                ax[i, j].set_title(filenames[idx].split('_')[-1].strip('.png'))
-            ax[i, j].axis('off')
-    plt.tight_layout()
+        plt.tight_layout()
 
-    if plot:
-        plt.show()
-    else:
-        plt.savefig(f"{save_path}/{image_name}.png")
+        if plot:
+            plt.show()
+        else:
+            plt.savefig(f"{save_path}/{image_name}.png")
+    finally:
+        plt.close()
 
 
 def prob(k: int, N: int) -> np.ndarray:

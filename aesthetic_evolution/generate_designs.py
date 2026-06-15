@@ -247,11 +247,14 @@ class DesignGenerator:
     def __init__(self, 
                  experiment_name: str,
                  sketch_dir: str,
+                 prompt: str,
                  processing: str = "serial",
                  screen: bool = False,
                  workers: int = 8) -> None:
         """
         Constructor for DesignGenerator class.
+        @author: Stephen Krol
+        @date: Jan 2026
         
         :param self: Current instance of the class. 
         :param experiment_name: Name of the experiment.
@@ -271,7 +274,7 @@ class DesignGenerator:
 
         # initialise folder structure
         self.experiment_name = experiment_name
-        self._initialise()
+        self._initialise(prompt)
 
         # set processing directory
         self.sketch_dir = sketch_dir
@@ -383,41 +386,38 @@ class DesignGenerator:
 
         filepath, sketch_dir, screen = jobs
 
-        # if screen is available
-        if screen:
-            subprocess.run([
-                "processing-java",
-                f"--sketch={sketch_dir}",
-                "--run",
-                filepath], 
+        cmd = [
+            "processing-java",
+            f"--sketch={sketch_dir}",
+            "--run",
+            filepath,
+        ]
+        if not screen:
+            cmd = ["xvfb-run", "-a", "--server-args=-screen 0 1024x768x24 -nolisten tcp"] + cmd
+
+        try:
+            subprocess.run(
+                cmd,
+                timeout=120,
                 check=True,
                 cwd=os.getcwd(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL)
-        else:
-            try:
-                subprocess.run([
-                    "xvfb-run", "-a",
-                    "--server-args=-screen 0 1024x768x24 -nolisten tcp",
-                    "processing-java",
-                    f"--sketch={sketch_dir}",
-                    "--run",
-                    filepath], 
-                    timeout=20,
-                    check=True,
-                    cwd=os.getcwd(),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL)
-            except subprocess.TimeoutExpired:
-                print(f"Timeout expired for design: {filename}")
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except subprocess.TimeoutExpired:
+            print(f"Timeout expired for design: {filepath}")
+        except subprocess.CalledProcessError as e:
+            print(f"Processing failed for {filepath} (exit {e.returncode}):\n{e.stderr.decode(errors='replace')}")
 
-    def _initialise(self) -> None:
+    def _initialise(self, prompt: str) -> None:
         """
         Method to initialise the Designs directory structure.
         @author: Stephen Krol
         @date: Jan 2026
 
         :param self: Current instance of the class.
+        :param prompt: Prompt for LLM to use in ranking designs, will be saved to experiment directory.
+        :type prompt: str
 
         :return: None
         :rtype: None
@@ -426,8 +426,15 @@ class DesignGenerator:
         if not os.path.exists("Experiments"):
             os.mkdir("Experiments")
 
-        if not os.path.exists(f"Experiments/{self.experiment_name}"):
-            os.mkdir(f"Experiments/{self.experiment_name}")
+        experiment_filepath = f"Experiments/{self.experiment_name}"
+
+        if not os.path.exists(experiment_filepath):
+            os.mkdir(experiment_filepath)
+        
+        # save prompt to experiment directory
+        with open(f"{experiment_filepath}/prompt.txt", 'w') as f:
+            f.write(prompt)
+        
 
     def _initialise_design(self, name: str):
         """
@@ -451,8 +458,7 @@ class DesignGenerator:
 
         if not os.path.exists(f"Experiments/{self.experiment_name}/{name}/Params"):
             os.mkdir(f"Experiments/{self.experiment_name}/{name}/Params")
-
-            
+        
 class DesignEvolver:
     """
     Class to manage the evolution of design populations using tournament selection.
@@ -476,6 +482,8 @@ class DesignEvolver:
                  mutation_sigma: float = 0.1,
                  parents_compete: bool = False,
                  competing_parents_rate: float = 0.1,
+                 pos_prompt: str = "Good Design",
+                 neg_prompt: str = "Bad Design",
                  plot_pop: bool = False) -> None:
         """
         Constructor for DesignEvolver class.
@@ -507,6 +515,10 @@ class DesignEvolver:
         :type parents_compete: bool
         :param competing_parents_rate: Proportion of top ranked parents to include in next population.
         :type competing_parents_rate: float
+        :param pos_prompt: Positive prompt for CLIP-IQA scoring.
+        :type pos_prompt: str
+        :param neg_prompt: Negative prompt for CLIP-IQA scoring.
+        :type neg_prompt: str
         :param plot_pop: Whether to plot the population images.
         :type plot_pop: bool
 
@@ -545,11 +557,19 @@ class DesignEvolver:
         # initialise processor
         if ranking_method == "CLIP-IQA":
             self.processor = CLIP_IQA()
+            self.pos_prompt = pos_prompt
+            self.neg_prompt = neg_prompt
         else:
+            # self.processor = Qwen3VLBatchProcessor(
+            #         model_name="Qwen/Qwen3-VL-8B-Thinking",
+            #         device="cuda" if torch.cuda.is_available() else "cpu"
+            #         )
+            
             self.processor = Qwen3VLBatchProcessor(
-                    model_name="Qwen/Qwen3-VL-7B-Instruct",
+                    model_name="Qwen/Qwen3-VL-8B-Instruct",
                     device="cuda" if torch.cuda.is_available() else "cpu"
                     )
+        
 
         # set plot population boolean
         self.plot_pop = plot_pop
@@ -617,12 +637,14 @@ class DesignEvolver:
             image_paths = [f"{population_image_fileapath}/{filename}" for filename in filenames]
             scores = self.processor.compute_clip_iqa_score(
                 image_path=image_paths,
-                positive_prompt="Good Design",
-                negative_prompt="Bad Design"
+                positive_prompt=self.pos_prompt,
+                negative_prompt=self.neg_prompt
             )
 
             sorted_idx = sorted(range(len(scores)), key=lambda i: scores[i][0], reverse=True)
             ranks = np.array([score[0] for score in scores])
+
+            print(sorted_idx)
 
         self.population_params = [self.population_params[i] for i in sorted_idx]
         sorted_ranks = ranks[sorted_idx]
@@ -916,7 +938,9 @@ def aesthetic_evolution(experiment_name: str,
                         population_size: int = 20,
                         processing: str = "serial",
                         screen: bool = False,
-                        workers: int = 8) -> None:
+                        workers: int = 8,
+                        pos_prompt: str | None = None,
+                        neg_prompt: str | None = None) -> None:
     """
     Main function for generating and evolving design populations.
     @author: Stephen Krol
@@ -956,6 +980,10 @@ def aesthetic_evolution(experiment_name: str,
     :type screen: bool
     :param workers: Number of worker threads or processes to use.
     :type workers: int
+    :param pos_prompt: Positive prompt for CLIP-IQA scoring.
+    :type pos_prompt: str | None
+    :param neg_prompt: Negative prompt for CLIP-IQA scoring.
+    :type neg_prompt: str | None
 
     :return: None
     :rtype: None
@@ -965,6 +993,7 @@ def aesthetic_evolution(experiment_name: str,
     generator = DesignGenerator(
             experiment_name=experiment_name,
             sketch_dir=sketch_dir,
+            prompt=prompt,
             processing=processing,
             screen=screen,
             workers=workers
@@ -974,6 +1003,9 @@ def aesthetic_evolution(experiment_name: str,
     k = max(2, round(k * population_size))
 
     # initialise evolver
+    resolved_pos_prompt = pos_prompt if pos_prompt is not None else "Good Design"
+    resolved_neg_prompt = neg_prompt if neg_prompt is not None else "Bad Design"
+
     evolver = DesignEvolver(
         spec_filepath=param_spec_filepath,
         experiment_name=experiment_name,
@@ -987,6 +1019,8 @@ def aesthetic_evolution(experiment_name: str,
         ranking_method=ranking_method,
         parents_compete=parents_compete,
         competing_parents_rate=competing_parents_rate,
+        pos_prompt=resolved_pos_prompt,
+        neg_prompt=resolved_neg_prompt,
         plot_pop=True
     )
 

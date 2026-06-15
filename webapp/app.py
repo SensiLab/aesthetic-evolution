@@ -12,6 +12,9 @@ def create_app() -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).resolve().parent / "templates"))
     service = JobService(workspace_root=workspace_root)
 
+    default_prompt_path = workspace_root / "config" / "reasoning_prompt.txt"
+    default_prompt_text = default_prompt_path.read_text(encoding="utf-8") if default_prompt_path.exists() else ""
+
     @app.get("/")
     def index():
         return render_template(
@@ -22,7 +25,9 @@ def create_app() -> Flask:
                 "runs": 5,
                 "population_size": 10,
                 "param_spec_file": "config/param_spec.yaml",
-                "prompt_filepath": "config/reasoning_prompt.txt",
+                "prompt_text": default_prompt_text,
+                "pos_prompt": "Good Design",
+                "neg_prompt": "Bad Design",
                 "processing": "parallel",
                 "screen": False,
                 "workers": 8,
@@ -32,7 +37,7 @@ def create_app() -> Flask:
                 "mutation_sigma": 0.1,
                 "parents_compete": True,
                 "competing_parents_rate": 0.1,
-                "k": 0.5,
+                "k": 0.25,
                 "ranking_method": "glicko",
                 "overwrite": False,
                 "sketch_dir": "/home/sjkro1/ARC-Discovery/Harmonograph",
@@ -42,6 +47,8 @@ def create_app() -> Flask:
     @app.post("/jobs")
     def create_job():
         payload = request.form.to_dict(flat=True)
+        payload["pos_prompt"] = request.form.get("pos_prompt", "")
+        payload["neg_prompt"] = request.form.get("neg_prompt", "")
         payload["screen"] = "screen" in request.form
         payload["parents_compete"] = "parents_compete" in request.form
         payload["overwrite"] = "overwrite" in request.form
@@ -93,7 +100,7 @@ def create_app() -> Flask:
             abort(404)
 
         selected_run = request.args.get("run") or (runs[0] if runs else None)
-        artifacts = service.run_artifacts(experiment_name, selected_run) if selected_run else {"plot_files": [], "design_files": [], "param_files": []}
+        artifacts = service.run_artifacts(experiment_name, selected_run) if selected_run else {"plot_files": [], "design_files": [], "param_files": [], "experiment_files": []}
 
         return render_template(
             "experiment.html",
@@ -122,4 +129,4 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8000, debug=False)
+    app.run(host="0.0.0.0", port=8000, debug=False)

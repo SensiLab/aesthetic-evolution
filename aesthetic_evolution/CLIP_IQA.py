@@ -25,7 +25,7 @@ class CLIP_IQA:
             self.model_name,
             pretrained=self.pretrained_tag,
             device=self.device,
-            quick_gelu=quick_gelu,
+            force_quick_gelu=quick_gelu,
 
         )
         self.model = self.remove_vision_positional_encoding(self.model)

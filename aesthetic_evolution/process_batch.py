@@ -4,7 +4,7 @@ Batch processing for Qwen3-VL model using true batching on GPU.
 """
 
 import torch
-from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
+from transformers import Qwen3VLForConditionalGeneration, Qwen3VLMoeForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
 from PIL import Image
 from pathlib import Path
@@ -16,7 +16,10 @@ from aesthetic_evolution.utils import ComparisonJob
 
 # TODO: add argumment for printing/logging performance
 class Qwen3VLBatchProcessor:
-    def __init__(self, model_name: str = "Qwen/Qwen3-VL-7B-Instruct", device: str = "cuda"):
+    def __init__(self, 
+                 model_name: str = "Qwen/Qwen3-VL-8B-Instruct", 
+                 device: str = "cuda",
+                 moe: bool=False):
         """
         Docstring for __init__
         @author: sjkrol
@@ -25,6 +28,8 @@ class Qwen3VLBatchProcessor:
         :type model_name: str
         :param device: Device to load model onto (e.g., 'cuda' or 'cpu').
         :type device: str
+        :param moe: Whether to use Mixture of Experts (MoE) version of the model if available.
+        :type moe: bool
 
         Return: None
         :rtype: None
@@ -32,14 +37,22 @@ class Qwen3VLBatchProcessor:
         self.device = device
         print(f"Loading model {model_name} on {device}...")
         
-        self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-            "Qwen/Qwen3-VL-8B-Instruct",
-            dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2",
-            device_map="cuda" if torch.cuda.is_available() else "cpu"
-        )
+        if moe:
+            self.model = Qwen3VLMoeForConditionalGeneration.from_pretrained(
+                model_name,
+                dtype=torch.bfloat16,
+                attn_implementation="flash_attention_2",
+                device_map="cuda" if torch.cuda.is_available() else "cpu"
+            )
+        else:
+            self.model = Qwen3VLForConditionalGeneration.from_pretrained(
+                model_name,
+                dtype=torch.bfloat16,
+                attn_implementation="flash_attention_2",
+                device_map="cuda" if torch.cuda.is_available() else "cpu"
+            )
         
-        self.processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-8B-Instruct")
+        self.processor = AutoProcessor.from_pretrained(model_name)
         print("Model loaded successfully!")
         
     def process_batch_parallel(self, jobs: List[ComparisonJob], validate: bool = True) -> List[Dict]:

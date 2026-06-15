@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pairwise Voting Status</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 1.5rem;
+      }
+      .panel {
+        border: 1px solid #ddd;
+        padding: 1rem;
+      }
+      ul {
+        columns: 2;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Voting Status: {{ status.status }}</h1>
+    <div class="panel">
+      <p><strong>Reason:</strong> {{ status.reason or 'n/a' }}</p>
+      <p><strong>Target n:</strong> {{ status.target_n }}</p>
+      <p><strong>Total images:</strong> {{ status.total_images }}</p>
+      <p><strong>Total votes:</strong> {{ status.total_votes }}</p>
+      <p><strong>Used pairs:</strong> {{ status.used_pairs }}</p>
+      <p><strong>CSV:</strong> {{ status.csv_path }}</p>
+      <p><strong>State:</strong> {{ status.state_path }}</p>
+    </div>
+
+    <h2>Remaining Deficit by Image</h2>
+    <ul>
+      {% for image_id, deficit in status.remaining_deficit.items() %}
+      <li>{{ image_id }}: {{ deficit }}</li>
+      {% endfor %}
+    </ul>
+  </body>
+</html>

@@ -45,7 +45,7 @@ Important fields:
 - **Population Size (even)**: Must be an even integer.
 - **Param Spec File**: Usually `config/param_spec.yaml`.
 - **Sketch Directory**: Absolute or repo-relative path to your Processing sketch.
-- **Prompt Filepath** or **Prompt Text**: provide one (prompt text overrides filepath when present).
+- **Prompt Text**: required input. The form is prefilled with `config/reasoning_prompt.txt` by default.
 - **Processing**: `serial` or `parallel`.
 - **Workers**: Parallel worker count (used if processing is parallel).
 - **Alpha Mode / Alpha**:
@@ -55,6 +55,7 @@ Important fields:
 - **Mutation Rate / Mutation Sigma**: Evolution mutation controls.
 - **Tournament k ratio (0..1)**: Fraction converted internally to tournament size.
 - **Ranking Method**: `glicko`, `simple`, or `CLIP-IQA`.
+- **Positive Prompt / Negative Prompt** (`pos_prompt` / `neg_prompt`): Only used when **Ranking Method** is `CLIP-IQA`. Describe what a "good" and "bad" image look like as plain text (defaults: `"Good Design"` / `"Bad Design"`). Ignored by Glicko and Simple methods.
 - **Screen**: Enable if Processing can access a display.
 - **Parents Compete / Competing Parents Rate**: Carry over top parents if enabled.
 - **Overwrite Existing Experiment**: Required if the experiment name already exists.
@@ -108,7 +109,7 @@ Web UI runtime metadata is stored in:
 ## Troubleshooting
 - **Import error for Flask**: install Flask in your active Python environment.
 - **Sketch path not found**: check `Sketch Directory` path is valid on disk.
-- **Prompt file not found**: verify `Prompt Filepath` exists, or paste prompt into `Prompt Text`.
+- **Prompt required**: ensure `Prompt Text` is not empty.
 - **Experiment already exists**: enable **Overwrite Existing Experiment** if replacement is intended.
 - **Long runtime**: expected for larger populations/runs and model-based ranking.
 

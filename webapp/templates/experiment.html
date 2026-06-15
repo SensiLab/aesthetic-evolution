@@ -29,6 +29,19 @@
   </div>
 
   <div class="card">
+    <h3>Experiment Files</h3>
+    <div class="items">
+      {% for name in artifacts.experiment_files %}
+        <div class="item">
+          <a href="/artifacts/{{ experiment_name }}/{{ name }}" target="_blank">{{ name }}</a>
+        </div>
+      {% else %}
+        <p>No experiment-level config/prompt files found.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
     <h3>Ranking & Generation Plots ({{ selected_run }})</h3>
     <div class="plots">
       {% for name in artifacts.plot_files %}

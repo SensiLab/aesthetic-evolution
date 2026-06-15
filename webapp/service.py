@@ -70,6 +70,7 @@ class JobService:
         return sorted(runs, key=lambda item: int(item.removeprefix("run")) if item.removeprefix("run").isdigit() else 9999)
 
     def run_artifacts(self, experiment_name: str, run_name: str) -> dict[str, Any]:
+        experiment_path = self.experiments_root / experiment_name
         run_path = self.experiments_root / experiment_name / run_name
         images_path = run_path / "Images"
         params_path = run_path / "Params"
@@ -92,10 +93,22 @@ class JobService:
         if params_path.exists():
             param_files = [file.name for file in sorted(params_path.iterdir()) if file.is_file() and file.suffix.lower() == ".json"]
 
+        experiment_files = []
+        config_file = experiment_path / "experiment_config.yaml"
+        if config_file.exists() and config_file.is_file():
+            experiment_files.append(config_file.name)
+
+        for file in sorted(experiment_path.iterdir()):
+            if not file.is_file() or file.name == "experiment_config.yaml":
+                continue
+            if "prompt" in file.name.lower():
+                experiment_files.append(file.name)
+
         return {
             "plot_files": plot_files,
             "design_files": design_files,
             "param_files": param_files,
+            "experiment_files": experiment_files,
         }
 
     def _worker_loop(self) -> None:
@@ -146,6 +159,8 @@ class JobService:
                     workers=config.workers,
                     parents_compete=config.parents_compete,
                     competing_parents_rate=config.competing_parents_rate,
+                    pos_prompt=config.pos_prompt,
+                    neg_prompt=config.neg_prompt,
                 )
 
                 exp_dir.mkdir(parents=True, exist_ok=True)
@@ -178,15 +193,7 @@ class JobService:
         return getattr(config, field_name)
 
     def _resolve_prompt(self, config: WebJobConfig) -> str:
-        if config.prompt_text:
-            return config.prompt_text
-
-        assert config.prompt_filepath is not None
-        prompt_path = self._resolve_path(config.prompt_filepath)
-        if not prompt_path.exists() or not prompt_path.is_file():
-            raise ValidationError(f"Prompt file '{config.prompt_filepath}' not found.")
-
-        return prompt_path.read_text(encoding="utf-8")
+        return config.prompt_text
 
     def _parse_config(self, payload: dict[str, Any]) -> WebJobConfig:
         alpha_mode = str(payload.get("alpha_mode", "")).strip()
@@ -208,9 +215,23 @@ class JobService:
             raise ValidationError("experiment_name contains invalid filesystem characters")
 
         prompt_filepath = str(payload.get("prompt_filepath", "")).strip() or None
-        prompt_text = str(payload.get("prompt_text", "")).strip() or None
-        if prompt_filepath is None and prompt_text is None:
-            raise ValidationError("Provide either prompt_filepath or prompt_text")
+        if prompt_filepath is not None:
+            raise ValidationError("prompt_filepath is not supported; provide prompt_text only")
+
+        prompt_text = str(payload.get("prompt_text", "")).strip()
+        pos_prompt = str(payload.get("pos_prompt", "")).strip() or None
+        neg_prompt = str(payload.get("neg_prompt", "")).strip() or None
+
+        if ranking_method == "CLIP-IQA":
+            if not pos_prompt:
+                raise ValidationError("pos_prompt is required when ranking_method is CLIP-IQA")
+            if not neg_prompt:
+                raise ValidationError("neg_prompt is required when ranking_method is CLIP-IQA")
+        else:
+            if not prompt_text:
+                raise ValidationError("prompt_text is required")
+            pos_prompt = None
+            neg_prompt = None
 
         alpha = payload.get("alpha")
         if alpha in ("", None):
@@ -274,18 +295,12 @@ class JobService:
         if not sketch_path.exists() or not sketch_path.is_dir():
             raise ValidationError(f"sketch_dir '{sketch_dir}' not found")
 
-        if prompt_filepath is not None:
-            resolved_prompt_path = self._resolve_path(prompt_filepath)
-            if not resolved_prompt_path.exists() or not resolved_prompt_path.is_file():
-                raise ValidationError(f"prompt_filepath '{prompt_filepath}' not found")
-
         config = WebJobConfig(
             experiment_name=experiment_name,
             runs=runs,
             population_size=population_size,
             param_spec_file=str(spec_path),
             sketch_dir=str(sketch_path),
-            prompt_filepath=str(self._resolve_path(prompt_filepath)) if prompt_filepath else None,
             prompt_text=prompt_text,
             processing=processing,
             screen=self._to_bool(payload.get("screen", False)),
@@ -298,6 +313,8 @@ class JobService:
             competing_parents_rate=competing_rate_value,
             k=k,
             ranking_method=ranking_method,
+            pos_prompt=pos_prompt,
+            neg_prompt=neg_prompt,
             overwrite=self._to_bool(payload.get("overwrite", False)),
         )
         return config
