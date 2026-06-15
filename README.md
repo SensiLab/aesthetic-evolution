@@ -514,6 +514,19 @@ For CLIP-IQA, step 1 loads all images and scores them against text prompts (no p
 
 ---
 
+## Citation
+
+If you use this work, please cite:
+
+```bibtex
+@article{krol2026evolving,
+  title={Evolving to the Aesthetics of a Vision-Language Model},
+  author={Krol, Stephen James and McCormack, Jon},
+  journal={arXiv preprint arXiv:2606.00112},
+  year={2026}
+}
+```
+
 ## Authors
 
 - Stephen Krol (@sjkro1) — January 2026
