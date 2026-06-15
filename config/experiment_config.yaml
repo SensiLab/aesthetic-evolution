@@ -2,7 +2,8 @@
 job:
   experiment_name: "model-naming-test"
   param_spec_file: "config/param_spec.yaml"
-  sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
+  # sketch_dir: "/home/sjkro1/ARC-Discovery/Harmonograph" # insert user sketch path here
+  sketch_dir: "/app/Harmonograph" # for docker
   prompt_filepath: "config/reasoning_prompt.txt"
   processing: parallel
   screen: False

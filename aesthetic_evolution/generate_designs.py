@@ -386,33 +386,28 @@ class DesignGenerator:
 
         filepath, sketch_dir, screen = jobs
 
-        # if screen is available
-        if screen:
-            subprocess.run([
-                "processing-java",
-                f"--sketch={sketch_dir}",
-                "--run",
-                filepath], 
+        cmd = [
+            "processing-java",
+            f"--sketch={sketch_dir}",
+            "--run",
+            filepath,
+        ]
+        if not screen:
+            cmd = ["xvfb-run", "-a", "--server-args=-screen 0 1024x768x24 -nolisten tcp"] + cmd
+
+        try:
+            subprocess.run(
+                cmd,
+                timeout=120,
                 check=True,
                 cwd=os.getcwd(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL)
-        else:
-            try:
-                subprocess.run([
-                    "xvfb-run", "-a",
-                    "--server-args=-screen 0 1024x768x24 -nolisten tcp",
-                    "processing-java",
-                    f"--sketch={sketch_dir}",
-                    "--run",
-                    filepath], 
-                    timeout=20,
-                    check=True,
-                    cwd=os.getcwd(),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL)
-            except subprocess.TimeoutExpired:
-                print(f"Timeout expired for design: {filename}")
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except subprocess.TimeoutExpired:
+            print(f"Timeout expired for design: {filepath}")
+        except subprocess.CalledProcessError as e:
+            print(f"Processing failed for {filepath} (exit {e.returncode}):\n{e.stderr.decode(errors='replace')}")
 
     def _initialise(self, prompt: str) -> None:
         """

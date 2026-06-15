@@ -1,0 +1,57 @@
+# Prerequisites on the host:
+#   sudo apt-get install -y nvidia-container-toolkit
+#   sudo systemctl restart docker
+#
+# Before running, update config/experiment_config.yaml:
+#   sketch_dir: /app/Harmonograph   (replaces any local absolute path)
+#
+# Usage (run from the aesthetic-evolution/ directory):
+#   docker compose up webapp        — main web UI at http://localhost:5000
+#   docker compose up pairwise      — pairwise voting at http://localhost:5050
+#   docker compose up               — both services
+
+services:
+  webapp:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./Experiments:/app/Experiments
+      - ./Data:/app/Data
+      - ./config:/app/config
+      - ./webapp/jobs:/app/webapp/jobs
+      - ../Harmonograph:/app/Harmonograph
+      - ${HF_CACHE_DIR}:/hf-hub-cache
+    environment:
+      SKETCH_DIR: /app/Harmonograph
+      HF_HUB_CACHE: /hf-hub-cache
+      HF_HUB_OFFLINE: "1"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: python3.13 run_web.py
+
+  pairwise:
+    build: .
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./Data:/app/Data
+      - ./pairwise_coverage_app/state:/app/pairwise_coverage_app/state
+      - ../Harmonograph:/app/Harmonograph
+      - ${HF_CACHE_DIR}:/hf-hub-cache
+    environment:
+      HF_HUB_CACHE: /hf-hub-cache
+      HF_HUB_OFFLINE: "1"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: python3.13 run_pairwise_coverage.py

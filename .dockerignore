@@ -1,0 +1,9 @@
+Experiments/
+Data/
+webapp/jobs/
+pairwise_coverage_app/state/
+notebooks/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+*.ipynb
