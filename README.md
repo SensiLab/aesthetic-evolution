@@ -78,11 +78,28 @@ See [Prerequisites](#prerequisites) and [Configuration](#configuration) for full
    ```
 
 4. **Install Python dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
 
-   > **Flash Attention note**: `requirements.txt` includes a pre-built wheel targeting RTX 5090 / CUDA 12.8. If you have a different GPU or CUDA version, build from source or download a matching wheel from the [Flash Attention releases page](https://github.com/Dao-AILab/flash-attention/releases).
+   PyTorch and Flash Attention are installed separately from the rest of the
+   dependencies because they need to match your specific CUDA setup.
+
+   a. Install PyTorch from the CUDA 12.8 wheel index:
+      ```bash
+      pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 torchaudio==2.7.0+cu128 \
+          --index-url https://download.pytorch.org/whl/cu128
+      ```
+      If you have a different CUDA version, use [pytorch.org's install selector](https://pytorch.org/get-started/locally/) to get the matching index URL/version instead.
+
+   b. Install the rest of the dependencies:
+      ```bash
+      pip install -r requirements.txt
+      ```
+
+   c. Install Flash Attention's build prerequisites and compile it from source:
+      ```bash
+      pip install psutil packaging ninja
+      pip install flash-attn==2.7.4.post1 --no-build-isolation
+      ```
+      This requires the CUDA **devel** toolkit (`nvcc`) installed locally, not just the driver, and takes ~10-20 minutes to compile. If you'd rather not compile, download a prebuilt wheel matching your exact torch/CUDA/Python/ABI combo from the [Flash Attention releases page](https://github.com/Dao-AILab/flash-attention/releases) instead.
 
 5. **Download the Qwen3-VL model** (first run only):
    The model (`Qwen/Qwen3-VL-8B-Instruct`) downloads automatically from HuggingFace on first run, provided `HF_CACHE_DIR` is set or a default cache is available. Requires ~16 GB disk space.

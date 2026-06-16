@@ -50,9 +50,9 @@ RUN python3.13 -m pip install --no-cache-dir flash-attn==2.7.4.post1 --no-build-
 # Remaining production dependencies
 # blinker must be force-reinstalled first — the Ubuntu base image ships a distutils-installed
 # blinker 1.4 that pip cannot cleanly upgrade when Flask pulls in a newer version
-COPY requirements-docker.txt .
+COPY requirements.txt .
 RUN python3.13 -m pip install --no-cache-dir --ignore-installed blinker && \
-    python3.13 -m pip install --no-cache-dir -r requirements-docker.txt
+    python3.13 -m pip install --no-cache-dir -r requirements.txt
 
 # Copy application code (Harmonograph is mounted at runtime, not baked in)
 COPY . .
